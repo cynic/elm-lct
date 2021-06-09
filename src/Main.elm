@@ -1,14 +1,36 @@
 module Main exposing (..)
-import Html exposing (div)
+import Html exposing (div, Html)
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
 import String exposing (fromInt, fromFloat)
 import List exposing (length)
 import Browser
 import String exposing (toInt)
+import Html.Events exposing (onClick)
+import Html exposing (button)
 
 -- diagram
 
+valueChange : Float -- how much a position can change by, normally
+valueChange =
+    0.1
+
+type alias RangeDescription =
+    { description : String
+    , range : ( Float, Float )
+    }
+
+type Point
+    = Value Float
+    | Described Float String
+
+type alias Dimension =
+    { texts : List RangeDescription
+    , points : List Point
+    }
+
+type Dimensions
+    = SG
 type alias Band = Int -- which band (0-3) we're drawing
 type alias Configuration =
     { eventSpacing : Int
@@ -18,8 +40,15 @@ type alias Diagram =
     , width : Int
     , graphHeight : Int
     , events : List (String)
+    , sg : Dimension
     , config : Configuration
+    , focusedDimension : Maybe Dimensions
     }
+
+-- Message
+type Message
+    = PlaceSG
+    | FocusOnSG
 
 dia_withGraphWidth : Diagram -> (Float -> Float) -> Float
 dia_withGraphWidth diagram f =
@@ -49,6 +78,25 @@ defaultConfig : Configuration
 defaultConfig =
     { eventSpacing = 60
     }
+
+sgInit : Dimension
+sgInit =
+    { texts =
+        [ { description = "Tied to a concrete context or situation, or tied to a set of known contexts or situations"
+          , range = ( -0.5, 0.0 )
+          }
+        , { description = "Strongly tied to specific context(s) or situation(s); requires effort to abstract"
+          , range = ( -1.0, -0.5 )
+          }
+        , { description = "Abstracted and generalized, with application still visible"
+          , range = ( 0.0, 0.5 )
+          }
+        , { description = "Theoretical, generalized, and abstracted; requires effort to tie to a context"
+          , range = ( 0.5, 1.0 )
+          }
+        ]
+    , points = [Value 0.0, Value 0.5, Value 0.3, Described 0.4 "I ain't so dense, amirite?  Hat.  Hat.", Value 0.8]
+    }
 init : Diagram
 init =
     { textHeight = 200
@@ -60,7 +108,9 @@ init =
         , "Lock-modify-unlock paradigm"
         , "Teamwork issues with lock-modify-unlock"
         ]
+    , sg = sgInit
     , config = defaultConfig
+    , focusedDimension = Nothing
     }
 
 horizAxis : Diagram -> Svg a
@@ -119,12 +169,16 @@ vertAxis diagram =
             []
         ]
 
+eventLineX : Diagram -> Int -> Float
+eventLineX diagram n =
+    dia_withGraphX diagram (\x -> x + toFloat n * toFloat diagram.config.eventSpacing)
+
 -- event line for event at index /n/
 eventLine : Diagram -> Int -> Svg a
 eventLine diagram n =
     line
-        [ x1 (fromFloat (dia_withGraphX diagram (\x -> x + toFloat n * toFloat diagram.config.eventSpacing)))
-        , x2 (fromFloat (dia_withGraphX diagram (\x -> x + toFloat n * toFloat diagram.config.eventSpacing)))
+        [ x1 (fromFloat (eventLineX diagram n))
+        , x2 (fromFloat (eventLineX diagram n))
         , y1 (fromFloat (dia_withGraphY diagram identity))
         , y2 (fromFloat (dia_withGraphHeight diagram identity))
         , stroke "#555"
@@ -178,7 +232,6 @@ events : Diagram -> List (Svg a)
 events diagram =
     List.indexedMap (event diagram) diagram.events
 
--- band : this is the "band" from 
 band : Diagram -> Band -> Svg a
 band diagram n =
     let
@@ -197,6 +250,116 @@ band diagram n =
             ]
             []
 
+createSGLine : Diagram -> Diagram
+createSGLine diagram =
+    { diagram | sg = { sgInit | points = [ Value 0.0 ] } }
+
+focusOn : Dimensions -> Diagram -> Diagram
+focusOn dim diagram =
+    { diagram | focusedDimension = Just dim }
+
+update : Message -> Diagram -> (Diagram, Cmd Message)
+update message diagram =
+    case message of
+    FocusOnSG ->
+        ( focusOn SG diagram , Cmd.none )
+    PlaceSG ->
+        ( createSGLine diagram, Cmd.none )
+
+pointToQuantitativeValue : Point -> Float
+pointToQuantitativeValue point =
+    case point of
+        Value v ->
+            v
+        Described v _ ->
+            v
+
+pointToGraphY : Diagram -> Point -> Float
+pointToGraphY diagram point =
+    let
+        v =
+            pointToQuantitativeValue point
+        inner h =
+            if v == 0.0 then
+                h / 2.0
+            else if v > 0.0 then
+                (h / 2.0) - (v * (h / 2.0))
+            else
+                (h / 2.0) + (-v * (h / 2.0))
+    in
+        dia_withGraphHeight diagram inner
+
+pointToGraphCoordinates : Diagram -> Int -> Point -> ( Float, Float )
+pointToGraphCoordinates diagram n point =
+    ( eventLineX diagram n, pointToGraphY diagram point )
+
+drawValuePoint : Diagram -> Int -> Point -> Svg a
+drawValuePoint diagram n point =
+    circle
+        [ cx (fromFloat (eventLineX diagram n))
+        , cy (fromFloat (pointToGraphY diagram point))
+        , r "5"
+        , fill "#fcab30cc"
+        , stroke "black"
+        ]
+        []
+
+drawDescribedPoint : Diagram -> Int -> Point -> String -> Svg a
+drawDescribedPoint diagram n point desc =
+    rect
+        [ x (fromFloat (eventLineX diagram n - 5))
+        , y (fromFloat (pointToGraphY diagram point - 5))
+        , width "10"
+        , height "10"
+        , fill "#fcab30cc"
+        , stroke "black"
+        ]
+        [ Svg.title [] [ text desc ] ]
+
+drawPoint : Diagram -> Int -> Point -> Svg a
+drawPoint diagram n point =
+    case point of
+        Value _ ->
+            drawValuePoint diagram n point
+        Described _ s ->
+            drawDescribedPoint diagram n point s
+
+drawContinuousLine : Diagram -> List ( Float, Float ) -> Svg a
+drawContinuousLine diagram coordinates =
+    case coordinates of
+        [] ->
+            g [] []
+        [_] ->
+            g [] []
+        (ix, iy)::rest ->
+            Svg.path
+                [ d
+                    ( List.foldl (\(x, y) state ->
+                        state ++ "C "
+                        ++ fromFloat (x - 15) ++ " " ++ fromFloat y ++ ", "
+                        ++ fromFloat (x + 15) ++ " " ++ fromFloat y ++ ", "
+                        ++ fromFloat x ++ " " ++ fromFloat y ++ " "
+                    ) ("M " ++ fromFloat ix ++ " " ++ fromFloat iy ++ " ") rest
+                    )
+                , stroke "#fcab30"
+                , strokeWidth "2"
+                , fill "transparent"
+                ]
+                []
+
+drawLine : Diagram -> List Point -> Svg a
+drawLine diagram points =
+    List.indexedMap ( pointToGraphCoordinates diagram ) points
+    |> drawContinuousLine diagram
+
+drawDimension : Diagram -> List Point -> Svg a
+drawDimension diagram points =
+    g
+        []
+        [ drawLine diagram points
+        , g [] ( List.indexedMap (drawPoint diagram) points )
+        ]
+
 svgView : Diagram -> Svg a
 svgView diagram =
   svg
@@ -213,16 +376,29 @@ svgView diagram =
     , g
         []
         (events diagram)
+    , drawDimension diagram diagram.sg.points
     ]
 
-update : msg -> Diagram -> (Diagram, Cmd msg)
-update _ diagram =
-    (diagram, Cmd.none)
-
+view : Diagram -> Html Message
 view diagram =
-    div [] [svgView diagram]
+    div
+        []
+        [ svgView diagram
+        , div
+            []
+            [ case diagram.sg.points of
+              [] ->
+                button
+                    [ onClick PlaceSG ]
+                    [ text "Create SG" ]
+              _ ->
+                button
+                    [ onClick FocusOnSG ]
+                    [ text "Focus on SG" ]
+            ]
+        ]
 
-main : Program () Diagram msg
+main : Program () Diagram Message
 main =
     Browser.element
         { init = \_ -> (init, Cmd.none)
