@@ -4,10 +4,13 @@ import Svg exposing (..)
 import Svg.Attributes exposing (..)
 import String exposing (fromInt, fromFloat)
 import List exposing (length)
-import Browser
 import String exposing (toInt)
 import Html.Events exposing (onClick)
+import Browser exposing (element)
 import Html exposing (button)
+import Browser.Events exposing (onMouseMove)
+import Json.Decode as D
+import Svg.Events exposing (on)
 
 -- diagram
 
@@ -38,6 +41,8 @@ type alias Band = Int -- which band (0-3) we're drawing
 type alias Configuration =
     { eventSpacing : Int
     }
+type Interactable
+    = PointInteraction Point
 type alias Diagram =
     { textHeight : Int
     , width : Int
@@ -46,13 +51,14 @@ type alias Diagram =
     , sg : Dimension
     , config : Configuration
     , focusedDimension : Maybe Dimensions
+    , interactable : Maybe Interactable
     }
 
 -- Message
 type Message
     = PlaceSG
     | FocusOnSG
-    | PointUIAround Point
+    | ShowUIForPoint Point
 
 dia_withGraphWidth : Diagram -> (Float -> Float) -> Float
 dia_withGraphWidth diagram f =
@@ -78,6 +84,12 @@ dia_fullWidth : Diagram -> Int
 dia_fullWidth diagram =
     diagram.width + 20
 
+dimensionData : Diagram -> Dimensions -> Dimension
+dimensionData diagram dim =
+    case dim of
+        SG ->
+            diagram.sg
+
 defaultConfig : Configuration
 defaultConfig =
     { eventSpacing = 60
@@ -99,7 +111,7 @@ sgInit =
           , range = ( 0.5, 1.0 )
           }
         ]
-    , points = [Value 0.0, Value 0.5, Value 0.3, Described 0.4 "I ain't so dense, amirite?  Hat.  Hat.", Value 0.8]
+    , points = [Value 0 0.0, Value 1 0.5, Value 2 0.3, Described 3 0.4 "I ain't so dense, amirite?  Hat.  Hat.", Value 4 0.8]
     }
 init : Diagram
 init =
@@ -115,6 +127,7 @@ init =
     , sg = sgInit
     , config = defaultConfig
     , focusedDimension = Nothing
+    , interactable = Nothing
     }
 
 horizAxis : Diagram -> Svg a
@@ -226,8 +239,8 @@ event diagram n s =
         , eventText diagram n s
         ]
 
-events : Diagram -> List (Svg a)
-events diagram =
+drawEvents : Diagram -> List (Svg a)
+drawEvents diagram =
     List.indexedMap (event diagram) diagram.events
 
 band : Diagram -> Band -> Svg a
@@ -250,11 +263,15 @@ band diagram n =
 
 createSGLine : Diagram -> Diagram
 createSGLine diagram =
-    { diagram | sg = { sgInit | points = [ Value 0.0 ] } }
+    { diagram | sg = { sgInit | points = [ Value 0 0.0 ] } }
 
 focusOn : Dimensions -> Diagram -> Diagram
 focusOn dim diagram =
     { diagram | focusedDimension = Just dim }
+
+showPointUI : Point -> Diagram -> Diagram
+showPointUI point diagram =
+    { diagram | interactable = Just (PointInteraction point) }
 
 update : Message -> Diagram -> (Diagram, Cmd Message)
 update message diagram =
@@ -263,13 +280,15 @@ update message diagram =
         ( focusOn SG diagram , Cmd.none )
     PlaceSG ->
         ( createSGLine diagram, Cmd.none )
+    ShowUIForPoint p ->
+        ( showPointUI p diagram, Cmd.none )
 
 pointToQuantitativeValue : Point -> Float
 pointToQuantitativeValue point =
     case point of
-        Value v ->
+        Value _ v ->
             v
-        Described v _ ->
+        Described _ v _ ->
             v
 
 pointToGraphY : Diagram -> Point -> Float
@@ -297,30 +316,30 @@ pointToEventLine point =
 
 pointToGraphCoordinates : Diagram -> Point -> ( Float, Float )
 pointToGraphCoordinates diagram point =
-    ( eventLineX diagram (pointToEventLine point), pointToGraphY diagram point )
+    ( eventLineToGraphX diagram (pointToEventLine point), pointToGraphY diagram point )
 
 drawPoint : Diagram -> Point -> Svg a
 drawPoint diagram point =
     case point of
         Value n v ->
             circle
-                [ cx (fromFloat (eventLineX diagram n))
+                [ cx (fromFloat (eventLineToGraphX diagram n))
                 , cy (fromFloat (pointToGraphY diagram point))
                 , r "5"
                 , fill "#fcab30cc"
                 , stroke "black"
                 ]
                 []
-        Described n v s ->
+        Described n v description ->
             rect
-                [ x (fromFloat (eventLineX diagram n - 5))
+                [ x (fromFloat (eventLineToGraphX diagram n - 5))
                 , y (fromFloat (pointToGraphY diagram point - 5))
                 , width "10"
                 , height "10"
                 , fill "#fcab30cc"
                 , stroke "black"
                 ]
-                [ Svg.title [] [ text desc ] ]
+                [ Svg.title [] [ text description ] ]
 
 drawContinuousLine : Diagram -> List ( Float, Float ) -> Svg a
 drawContinuousLine diagram coordinates =
@@ -358,6 +377,68 @@ drawDimension diagram points =
         , g [] ( List.map (drawPoint diagram) points )
         ]
 
+first : (a -> Bool) -> List a -> Maybe a
+first predicate list =
+    case list of
+        [] ->
+            Nothing
+        h::rest ->
+            if predicate h then
+                Just h
+            else
+                first predicate rest
+
+pointWithinRadius : Diagram -> Int -> (Int, Int) -> List Point -> Maybe Point
+pointWithinRadius diagram radius (x, y) points =
+    first
+        (\point ->
+            let
+                (px, py) = pointToGraphCoordinates diagram point
+                dx = px - toFloat x
+                dy = py - toFloat y
+            in
+                sqrt (dx * dx + dy * dy) <= toFloat radius                
+        )
+        points
+
+withinPointRadius : Diagram -> D.Decoder Message
+withinPointRadius diagram =
+    case diagram.focusedDimension |> Maybe.map (dimensionData diagram) of
+        Nothing ->
+            D.fail "No focused dimension"
+        Just dimension ->
+            D.map2 (\x y -> (x, y))
+                (D.field "clientX" D.int)
+                (D.field "clientY" D.int)
+            |> D.andThen
+                (\coords ->
+                    case pointWithinRadius diagram 25 coords dimension.points of
+                        Just point ->
+                            D.succeed (ShowUIForPoint point)
+                        Nothing ->
+                            D.fail "No point within radius"
+                )
+
+drawInteractable : Diagram -> Maybe Interactable -> List (Svg a)
+drawInteractable diagram interactable =
+    case interactable of
+        Nothing ->
+            []
+        Just (PointInteraction point) ->
+            pointToGraphCoordinates diagram point
+            |> (\(x, y) ->
+                [ circle
+                    [ cx (fromFloat x)
+                    , cy (fromFloat y)
+                    , fill "#fff5"
+                    , stroke "black"
+                    , r "25"
+                    ]
+                    []
+                ]
+            )
+    
+
 svgView : Diagram -> Svg a
 svgView diagram =
   svg
@@ -373,7 +454,10 @@ svgView diagram =
     , vertAxis diagram
     , g
         []
-        (events diagram)
+        (drawEvents diagram)
+    , g
+        []
+        (drawInteractable diagram diagram.interactable)
     , drawDimension diagram diagram.sg.points
     ]
 
@@ -381,7 +465,9 @@ view : Diagram -> Html Message
 view diagram =
     div
         []
-        [ svgView diagram
+        [ div
+            [ Svg.Events.on "mousemove" (withinPointRadius diagram) ]
+            [ svgView diagram ]
         , div
             []
             [ case diagram.sg.points of
@@ -395,8 +481,6 @@ view diagram =
                     [ text "Focus on SG" ]
             ]
         ]
-
-subscriptions : Diagram -> Sub Message
 
 main : Program () Diagram Message
 main =
