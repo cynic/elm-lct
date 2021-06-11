@@ -15,14 +15,17 @@ valueChange : Float -- how much a position can change by, normally
 valueChange =
     0.1
 
+type alias EventLine =
+    Int
+
 type alias RangeDescription =
     { description : String
     , range : ( Float, Float )
     }
 
 type Point
-    = Value Float
-    | Described Float String
+    = Value EventLine Float
+    | Described EventLine Float String
 
 type alias Dimension =
     { texts : List RangeDescription
@@ -49,6 +52,7 @@ type alias Diagram =
 type Message
     = PlaceSG
     | FocusOnSG
+    | PointUIAround Point
 
 dia_withGraphWidth : Diagram -> (Float -> Float) -> Float
 dia_withGraphWidth diagram f =
@@ -169,16 +173,16 @@ vertAxis diagram =
             []
         ]
 
-eventLineX : Diagram -> Int -> Float
-eventLineX diagram n =
+eventLineToGraphX : Diagram -> EventLine -> Float
+eventLineToGraphX diagram n =
     dia_withGraphX diagram (\x -> x + toFloat n * toFloat diagram.config.eventSpacing)
 
 -- event line for event at index /n/
 eventLine : Diagram -> Int -> Svg a
 eventLine diagram n =
     line
-        [ x1 (fromFloat (eventLineX diagram n))
-        , x2 (fromFloat (eventLineX diagram n))
+        [ x1 (fromFloat (eventLineToGraphX diagram n))
+        , x2 (fromFloat (eventLineToGraphX diagram n))
         , y1 (fromFloat (dia_withGraphY diagram identity))
         , y2 (fromFloat (dia_withGraphHeight diagram identity))
         , stroke "#555"
@@ -188,37 +192,31 @@ eventLine diagram n =
         []
 
 -- event text for event at index /n/, with string /s/
-eventText : Diagram -> Int -> String -> Svg a
+eventText : Diagram -> EventLine -> String -> Svg a
 eventText diagram n s =
-    let
-        x_ = dia_withGraphX diagram (\x -> x + toFloat n * toFloat diagram.config.eventSpacing)
-        y_ = dia_withGraphY diagram identity
-        x__ = fromFloat x_
-        y__ = fromFloat y_
-    in
-        g
-            [ transform ("rotate(-40, " ++ x__ ++ ", " ++ y__ ++ ")")
+    g
+        [ transform ("rotate(-40, " ++ fromFloat (eventLineToGraphX diagram n) ++ ", " ++ fromFloat (dia_withGraphY diagram identity) ++ ")")
+        ]
+        [ line
+            [ x1 (fromFloat (eventLineToGraphX diagram n))
+            , y1 (fromFloat (dia_withGraphY diagram identity))
+            , x2 (fromFloat (eventLineToGraphX diagram n + 300))
+            , y2 (fromFloat (dia_withGraphY diagram identity))
+            , stroke "#ccc"
+            , strokeDasharray "1 1"
             ]
-            [ line
-                [ x1 x__
-                , y1 y__
-                , x2 (fromFloat (x_ + 300))
-                , y2 y__
-                , stroke "#ccc"
-                , strokeDasharray "1 1"
-                ]
-                []
-            , text_
-                [ x x__
-                , y y__
-                , fill "black"
-                --, textLength (fromInt diagram.config.eventSpacing ++ "px")
-                , fontFamily "Calibri, sans-serif"
-                , fontSize "11pt"
-                ]
-                [ text s
-                ]
+            []
+        , text_
+            [ x (fromFloat (eventLineToGraphX diagram n))
+            , y (fromFloat (dia_withGraphY diagram identity))
+            , fill "black"
+            --, textLength (fromInt diagram.config.eventSpacing ++ "px")
+            , fontFamily "Calibri, sans-serif"
+            , fontSize "11pt"
             ]
+            [ text s
+            ]
+        ]
 
 event : Diagram -> Int -> String -> Svg a
 event diagram n s =
@@ -289,40 +287,40 @@ pointToGraphY diagram point =
     in
         dia_withGraphHeight diagram inner
 
-pointToGraphCoordinates : Diagram -> Int -> Point -> ( Float, Float )
-pointToGraphCoordinates diagram n point =
-    ( eventLineX diagram n, pointToGraphY diagram point )
-
-drawValuePoint : Diagram -> Int -> Point -> Svg a
-drawValuePoint diagram n point =
-    circle
-        [ cx (fromFloat (eventLineX diagram n))
-        , cy (fromFloat (pointToGraphY diagram point))
-        , r "5"
-        , fill "#fcab30cc"
-        , stroke "black"
-        ]
-        []
-
-drawDescribedPoint : Diagram -> Int -> Point -> String -> Svg a
-drawDescribedPoint diagram n point desc =
-    rect
-        [ x (fromFloat (eventLineX diagram n - 5))
-        , y (fromFloat (pointToGraphY diagram point - 5))
-        , width "10"
-        , height "10"
-        , fill "#fcab30cc"
-        , stroke "black"
-        ]
-        [ Svg.title [] [ text desc ] ]
-
-drawPoint : Diagram -> Int -> Point -> Svg a
-drawPoint diagram n point =
+pointToEventLine : Point -> EventLine
+pointToEventLine point =
     case point of
-        Value _ ->
-            drawValuePoint diagram n point
-        Described _ s ->
-            drawDescribedPoint diagram n point s
+        Value n _ ->
+            n
+        Described n _ _ ->
+            n
+
+pointToGraphCoordinates : Diagram -> Point -> ( Float, Float )
+pointToGraphCoordinates diagram point =
+    ( eventLineX diagram (pointToEventLine point), pointToGraphY diagram point )
+
+drawPoint : Diagram -> Point -> Svg a
+drawPoint diagram point =
+    case point of
+        Value n v ->
+            circle
+                [ cx (fromFloat (eventLineX diagram n))
+                , cy (fromFloat (pointToGraphY diagram point))
+                , r "5"
+                , fill "#fcab30cc"
+                , stroke "black"
+                ]
+                []
+        Described n v s ->
+            rect
+                [ x (fromFloat (eventLineX diagram n - 5))
+                , y (fromFloat (pointToGraphY diagram point - 5))
+                , width "10"
+                , height "10"
+                , fill "#fcab30cc"
+                , stroke "black"
+                ]
+                [ Svg.title [] [ text desc ] ]
 
 drawContinuousLine : Diagram -> List ( Float, Float ) -> Svg a
 drawContinuousLine diagram coordinates =
@@ -349,7 +347,7 @@ drawContinuousLine diagram coordinates =
 
 drawLine : Diagram -> List Point -> Svg a
 drawLine diagram points =
-    List.indexedMap ( pointToGraphCoordinates diagram ) points
+    List.map ( pointToGraphCoordinates diagram ) points
     |> drawContinuousLine diagram
 
 drawDimension : Diagram -> List Point -> Svg a
@@ -357,7 +355,7 @@ drawDimension diagram points =
     g
         []
         [ drawLine diagram points
-        , g [] ( List.indexedMap (drawPoint diagram) points )
+        , g [] ( List.map (drawPoint diagram) points )
         ]
 
 svgView : Diagram -> Svg a
@@ -397,6 +395,8 @@ view diagram =
                     [ text "Focus on SG" ]
             ]
         ]
+
+subscriptions : Diagram -> Sub Message
 
 main : Program () Diagram Message
 main =
