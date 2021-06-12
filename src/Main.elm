@@ -11,6 +11,14 @@ import Html exposing (button)
 import Browser.Events exposing (onMouseMove)
 import Json.Decode as D
 import Svg.Events exposing (on)
+-- height and width of these are 496.625
+import FontAwesome.Solid
+import FontAwesome.Svg exposing (viewIcon)
+import FontAwesome.Styles exposing (css)
+import Html.Attributes exposing (href)
+
+iconSize : Float
+iconSize = 512.0
 
 -- diagram
 
@@ -41,6 +49,14 @@ type alias Band = Int -- which band (0-3) we're drawing
 type alias Configuration =
     { eventSpacing : Int
     }
+-- What do I want to do with a Point?
+-- 1. move it up
+-- 2. move it down
+-- 3. create a new point with more +
+-- 4. create a new point with more -
+-- 5. create a new point at the same level
+-- 6. trash the point
+-- 7. modify/add a description
 type Interactable
     = PointInteraction Point
 type alias Diagram =
@@ -92,7 +108,7 @@ dimensionData diagram dim =
 
 defaultConfig : Configuration
 defaultConfig =
-    { eventSpacing = 60
+    { eventSpacing = 90    
     }
 
 sgInit : Dimension
@@ -116,8 +132,8 @@ sgInit =
 init : Diagram
 init =
     { textHeight = 200
-    , width = 400
-    , graphHeight = 220
+    , width = 600
+    , graphHeight = 320
     , events =
         [ "What problem(s) does version control address?"
         , "Older (centralized) version control"
@@ -369,13 +385,9 @@ drawLine diagram points =
     List.map ( pointToGraphCoordinates diagram ) points
     |> drawContinuousLine diagram
 
-drawDimension : Diagram -> List Point -> Svg a
-drawDimension diagram points =
-    g
-        []
-        [ drawLine diagram points
-        , g [] ( List.map (drawPoint diagram) points )
-        ]
+drawPoints : Diagram -> List Point -> Svg a
+drawPoints diagram points =
+    g [] ( List.map (drawPoint diagram) points )
 
 first : (a -> Bool) -> List a -> Maybe a
 first predicate list =
@@ -412,33 +424,126 @@ withinPointRadius diagram =
                 (D.field "clientY" D.int)
             |> D.andThen
                 (\coords ->
-                    case pointWithinRadius diagram 25 coords dimension.points of
+                    case pointWithinRadius diagram 35 coords dimension.points of
                         Just point ->
                             D.succeed (ShowUIForPoint point)
                         Nothing ->
                             D.fail "No point within radius"
                 )
 
-drawInteractable : Diagram -> Maybe Interactable -> List (Svg a)
+
+drawPointInteractionUI : Diagram -> Point -> Svg a
+drawPointInteractionUI diagram point =
+    pointToGraphCoordinates diagram point
+    |> (\(x, y) ->
+        g
+            []
+            [ circle
+                [ cx (fromFloat x)
+                , cy (fromFloat y)
+                , fill "#fff5"
+                , stroke "black"
+                , r "35"
+                ]
+                []
+            , g
+                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (16 -9) scale (0.03)")
+                , Svg.Attributes.cursor "pointer"
+                ]
+                [ circle
+                    [ r "256"
+                    , fill "yellow"
+                    , cx "256"
+                    , cy "256"
+                    , id "right"
+                    ]
+                    []
+                , viewIcon FontAwesome.Solid.arrowCircleRight
+                ]
+            , g
+                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (-45) translate (16 -9) scale (0.03)")
+                , Svg.Attributes.cursor "pointer"
+                ]
+                [ circle
+                    [ r "256"
+                    , fill "yellow"
+                    , cx "256"
+                    , cy "256"
+                    ]
+                    []
+                , viewIcon FontAwesome.Solid.arrowCircleRight
+                ] -- top-right
+            , g
+                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (45) translate (16 -9) scale (0.03)")
+                , Svg.Attributes.cursor "pointer"
+                ]
+                [ circle
+                    [ r "256"
+                    , fill "yellow"
+                    , cx "256"
+                    , cy "256"
+                    ]
+                    []
+                , viewIcon FontAwesome.Solid.arrowCircleRight
+                ] -- bottom-right
+            , g
+                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (-90) translate (16 -9) scale (0.03)")
+                , Svg.Attributes.cursor "pointer"
+                ]
+                [ circle
+                    [ r "256"
+                    , fill "yellow"
+                    , cx "256"
+                    , cy "256"
+                    ]
+                    []
+                , viewIcon FontAwesome.Solid.arrowCircleRight
+                ] -- top
+            , g
+                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (90) translate (16 -9) scale (0.03)")
+                , Svg.Attributes.cursor "pointer"
+                ]
+                [ circle
+                    [ r "256"
+                    , fill "yellow"
+                    , cx "256"
+                    , cy "256"
+                    ]
+                    []
+                , viewIcon FontAwesome.Solid.arrowCircleRight
+                ] -- bottom
+            , g
+                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (-26 -16) scale (0.03)")
+                , Svg.Attributes.cursor "pointer"
+                ]
+                [ rect
+                    [ Svg.Attributes.x "0"
+                    , Svg.Attributes.y "50"
+                    , width "462"
+                    , height "462"
+                    , fill "yellow"
+                    ]
+                    []
+                , viewIcon FontAwesome.Solid.edit
+                ] -- top-left
+            , g
+                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (-26 6) scale (0.03)")
+                , color "red"
+                , Svg.Attributes.cursor "pointer"
+                ]
+                [ viewIcon FontAwesome.Solid.trash
+                ] -- top-left
+            ]
+    )
+
+drawInteractable : Diagram -> Maybe Interactable -> Svg a
 drawInteractable diagram interactable =
     case interactable of
         Nothing ->
-            []
+            g [] []
         Just (PointInteraction point) ->
-            pointToGraphCoordinates diagram point
-            |> (\(x, y) ->
-                [ circle
-                    [ cx (fromFloat x)
-                    , cy (fromFloat y)
-                    , fill "#fff5"
-                    , stroke "black"
-                    , r "25"
-                    ]
-                    []
-                ]
-            )
+            drawPointInteractionUI diagram point
     
-
 svgView : Diagram -> Svg a
 svgView diagram =
   svg
@@ -455,10 +560,9 @@ svgView diagram =
     , g
         []
         (drawEvents diagram)
-    , g
-        []
-        (drawInteractable diagram diagram.interactable)
-    , drawDimension diagram diagram.sg.points
+    , drawLine diagram diagram.sg.points
+    , drawInteractable diagram diagram.interactable
+    , drawPoints diagram diagram.sg.points
     ]
 
 view : Diagram -> Html Message
