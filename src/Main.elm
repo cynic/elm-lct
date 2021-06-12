@@ -75,6 +75,7 @@ type Message
     = PlaceSG
     | FocusOnSG
     | ShowUIForPoint Point
+    | RemovePointUI
 
 dia_withGraphWidth : Diagram -> (Float -> Float) -> Float
 dia_withGraphWidth diagram f =
@@ -289,6 +290,10 @@ showPointUI : Point -> Diagram -> Diagram
 showPointUI point diagram =
     { diagram | interactable = Just (PointInteraction point) }
 
+removePointUI : Diagram -> Diagram
+removePointUI diagram =
+    { diagram | interactable = Nothing }
+
 update : Message -> Diagram -> (Diagram, Cmd Message)
 update message diagram =
     case message of
@@ -298,6 +303,8 @@ update message diagram =
         ( createSGLine diagram, Cmd.none )
     ShowUIForPoint p ->
         ( showPointUI p diagram, Cmd.none )
+    RemovePointUI ->
+        ( removePointUI diagram, Cmd.none )
 
 pointToQuantitativeValue : Point -> Float
 pointToQuantitativeValue point =
@@ -428,9 +435,12 @@ withinPointRadius diagram =
                         Just point ->
                             D.succeed (ShowUIForPoint point)
                         Nothing ->
-                            D.fail "No point within radius"
+                            case diagram.interactable of
+                                Just (PointInteraction _) ->
+                                    D.succeed RemovePointUI
+                                Nothing ->
+                                    D.fail "No point within radius"
                 )
-
 
 drawPointInteractionUI : Diagram -> Point -> Svg a
 drawPointInteractionUI diagram point =
