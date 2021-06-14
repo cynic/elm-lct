@@ -12,6 +12,12 @@ import FontAwesome.Solid
 import FontAwesome.Svg exposing (viewIcon)
 import Svg.Events exposing (onClick)
 
+-- TODO: Better bands, which actually reflect the ranges and meanings of the focused dimension
+-- TODO: Better UX for moving a point up and down ... perhaps dragging and/or keypresses?
+-- TODO: Band colours should be reflective of focused dimension.
+-- TODO: Should be able to add and delete events
+-- TODO: (Limited?) Undo?
+
 iconSize : Float
 iconSize = 512.0
 
@@ -435,22 +441,21 @@ drawPoint diagram point =
                 ]
                 [ Svg.title [] [ text description ] ]
 
-drawContinuousLine : List ( Float, Float ) -> Svg a
-drawContinuousLine coordinates =
+drawContinuousLine : Diagram -> List ( Float, Float ) -> Svg a
+drawContinuousLine diagram coordinates =
     case coordinates of
         [] ->
             g [] []
         [_] ->
             g [] []
-        (ix, iy)::rest ->
+        (ix, iy)::_ ->
             Svg.path
                 [ d
                     ( List.foldl (\(x, y) state ->
-                        state ++ "C "
-                        ++ fromFloat (x - 15) ++ " " ++ fromFloat y ++ ", "
-                        ++ fromFloat (x + 15) ++ " " ++ fromFloat y ++ ", "
+                        state
+                        ++ fromFloat (x - (toFloat diagram.config.eventSpacing / 2)) ++ " " ++ fromFloat y ++ ", "
                         ++ fromFloat x ++ " " ++ fromFloat y ++ " "
-                    ) ("M " ++ fromFloat ix ++ " " ++ fromFloat iy ++ " ") rest
+                    ) ("M " ++ fromFloat ix ++ " " ++ fromFloat iy ++ " S ") coordinates
                     )
                 , stroke "#fcab30"
                 , strokeWidth "2"
@@ -462,7 +467,7 @@ drawLine : Diagram -> List Point -> Svg a
 drawLine diagram =
     List.sortBy ( pointToEventLine )
     >> List.map ( pointToGraphCoordinates diagram )
-    >> drawContinuousLine
+    >> ( drawContinuousLine diagram )
 
 drawPoints : Diagram -> List Point -> Svg a
 drawPoints diagram points =
