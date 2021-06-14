@@ -41,6 +41,8 @@ type Point
 type alias Dimension =
     { texts : List RangeDescription
     , points : List Point
+    , plus : String
+    , minus : String
     }
 
 type Dimensions
@@ -79,7 +81,7 @@ type Message
 
 dia_withGraphWidth : Diagram -> (Float -> Float) -> Float
 dia_withGraphWidth diagram f =
-    f (toFloat diagram.width) + 20.0
+    f (toFloat diagram.width) + 30.0
 
 dia_withGraphHeight : Diagram -> (Float -> Float) -> Float
 dia_withGraphHeight diagram f =
@@ -87,7 +89,7 @@ dia_withGraphHeight diagram f =
 
 dia_withGraphX : Diagram -> (Float -> Float) -> Float
 dia_withGraphX diagram f =
-    f (toFloat 20)
+    f (toFloat 30)
 
 dia_withGraphY : Diagram -> (Float -> Float) -> Float
 dia_withGraphY diagram f =
@@ -95,14 +97,14 @@ dia_withGraphY diagram f =
 
 dia_fullHeight : Diagram -> Int
 dia_fullHeight diagram =
-    diagram.textHeight + diagram.graphHeight
+    diagram.textHeight + diagram.graphHeight + 35 -- the 35 is for under-graph space
 
 dia_fullWidth : Diagram -> Int
 dia_fullWidth diagram =
-    diagram.width + 20
+    diagram.width + 30
 
-dimensionData : Diagram -> Dimensions -> Dimension
-dimensionData diagram dim =
+dimensionsToDimension : Diagram -> Dimensions -> Dimension
+dimensionsToDimension diagram dim =
     case dim of
         SG ->
             diagram.sg
@@ -128,18 +130,23 @@ sgInit =
           , range = ( 0.5, 1.0 )
           }
         ]
-    , points = [Value 0 0.0, Value 1 0.5, Value 2 0.3, Described 3 0.4 "I ain't so dense, amirite?  Hat.  Hat.", Value 4 0.8]
+    , points = [Value 0 0.0, Value 1 0.5, Value 2 0.9, Described 3 1.0 "I ain't so dense, amirite?  Hat.  Hat.", Value 4 -0.9, Value 5 -1.0]
+    , plus = "Increased abstraction and generalization; less embedded in a specific and concrete context"
+    , minus = "Increased binding to a particular context or situation; decreased applicability to many different contexts"
     }
 init : Diagram
 init =
-    { textHeight = 200
-    , width = 600
+    { textHeight = 250
+    , width = 800
     , graphHeight = 320
     , events =
         [ "What problem(s) does version control address?"
         , "Older (centralized) version control"
         , "Lock-modify-unlock paradigm"
+        , "Sequence diagram for lock-modify-unlock - practical example"
         , "Teamwork issues with lock-modify-unlock"
+        , "Alternative: copy-modify-merge"
+        , "Sequence diagram for copy-modify-merge"
         ]
     , sg = sgInit
     , config = defaultConfig
@@ -163,44 +170,14 @@ vertAxis : Diagram -> Svg a
 vertAxis diagram =
     g
         []
-        [ text_
-            [ x (fromFloat (dia_withGraphX diagram (\x -> x - 15)))
-            , y (fromFloat (dia_withGraphY diagram (\y -> y + 13)))
-            , fill "black"
-            , fontFamily "Calibri"
-            , fontSize "14pt"
-            , fontWeight "bold"
+        [ g
+            [ transform ("translate (" ++ fromFloat (dia_withGraphX diagram (\x -> x - 28)) ++ " " ++ fromFloat (dia_withGraphY diagram identity) ++ ") scale (0.05)")
             ]
-            [ text "+"
+            [ viewIcon FontAwesome.Solid.plusCircle ]
+        , g
+            [ transform ("translate (" ++ fromFloat (dia_withGraphX diagram (\x -> x - 28)) ++ " " ++ fromFloat (dia_withGraphHeight diagram (\h -> h - 28)) ++ ") scale (0.05)")
             ]
-        , circle
-            [ cx (fromFloat (dia_withGraphX diagram (\x -> x - 10.5)))
-            , cy (fromFloat (dia_withGraphY diagram (\y -> y + 8.5)))
-            , r "8"
-            , fill "transparent"
-            , stroke "black"
-            , strokeWidth "2"
-            ]
-            []
-        , text_
-            [ x (fromFloat (dia_withGraphX diagram (\x -> x - 15)))
-            , y (fromFloat (dia_withGraphHeight diagram (\h -> h - 5)))
-            , fill "black"
-            , fontFamily "Calibri"
-            , fontSize "14pt"
-            , fontWeight "bold"
-            ]
-            [ text "–"
-            ]
-        , circle
-            [ cx (fromFloat (dia_withGraphX diagram (\x -> x - 10.5)))
-            , cy (fromFloat (dia_withGraphHeight diagram (\h -> h - 10)))
-            , r "8"
-            , fill "transparent"
-            , stroke "black"
-            , strokeWidth "2"
-            ]
-            []
+            [ viewIcon FontAwesome.Solid.minusCircle ]
         ]
 
 eventLineToGraphX : Diagram -> EventLine -> Float
@@ -208,8 +185,8 @@ eventLineToGraphX diagram n =
     dia_withGraphX diagram (\x -> x + toFloat n * toFloat diagram.config.eventSpacing)
 
 -- event line for event at index /n/
-eventLine : Diagram -> Int -> Svg a
-eventLine diagram n =
+drawEventLine : Diagram -> Int -> Svg a
+drawEventLine diagram n =
     line
         [ x1 (fromFloat (eventLineToGraphX diagram n))
         , x2 (fromFloat (eventLineToGraphX diagram n))
@@ -252,7 +229,7 @@ event : Diagram -> Int -> String -> Svg a
 event diagram n s =
     g
         []
-        [ eventLine diagram n
+        [ drawEventLine diagram n
         , eventText diagram n s
         ]
 
@@ -271,9 +248,9 @@ band diagram n =
     in
         rect
             [ x (fromFloat (dia_withGraphX diagram identity))
-            , width (fromFloat (dia_withGraphWidth diagram identity))
+            , width (fromFloat (toFloat diagram.width))
             , y (fromFloat (dia_withGraphHeight diagram (\h -> toFloat n / 4 * h)))
-            , height (fromFloat (dia_withGraphHeight diagram (\h -> (toFloat n+1)+1/4 * h)))
+            , height (fromFloat (toFloat diagram.graphHeight / 4.0))
             , fill color
             ]
             []
@@ -422,7 +399,7 @@ pointWithinRadius diagram radius (x, y) points =
 
 withinPointRadius : Diagram -> D.Decoder Message
 withinPointRadius diagram =
-    case diagram.focusedDimension |> Maybe.map (dimensionData diagram) of
+    case diagram.focusedDimension |> Maybe.map (dimensionsToDimension diagram) of
         Nothing ->
             D.fail "No focused dimension"
         Just dimension ->
@@ -442,8 +419,32 @@ withinPointRadius diagram =
                                     D.fail "No point within radius"
                 )
 
-drawPointInteractionUI : Diagram -> Point -> Svg a
-drawPointInteractionUI diagram point =
+-- is this a point that can be extended to the next event line?
+--   - In other words: is there already a point n+1 ??
+-- is there an event line that this point can be extended to?
+--   - In other words: is there an eventLine n+1 ??
+-- if the answer to BOTH is "yes", then it is an "extension point"
+
+canExtendFrom : Dimension -> Point -> Bool
+canExtendFrom dimension point =
+    let
+        pEventLine =
+            pointToEventLine point
+    in
+        -- I can only extend from a point if there isn't already another point that
+        -- occupies the same space.
+        List.all (\p -> pointToEventLine p /= pEventLine + 1) dimension.points
+
+eventLineExists : Diagram -> EventLine -> Bool
+eventLineExists diagram eventLine =
+    eventLine < List.length diagram.events
+
+isExtensionPoint : Diagram -> Dimension -> Point -> Bool
+isExtensionPoint diagram dimension point =
+    canExtendFrom dimension point && eventLineExists diagram (pointToEventLine point)
+
+drawPointInteractionUI : Diagram -> Dimension -> Point -> Svg a
+drawPointInteractionUI diagram dimension point =
     pointToGraphCoordinates diagram point
     |> (\(x, y) ->
         g
@@ -455,73 +456,103 @@ drawPointInteractionUI diagram point =
                 , stroke "black"
                 , r "35"
                 ]
-                []
-            , g
-                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (16 -9) scale (0.03)")
-                , Svg.Attributes.cursor "pointer"
-                ]
-                [ circle
-                    [ r "256"
-                    , fill "yellow"
-                    , cx "256"
-                    , cy "256"
-                    , id "right"
+                [] -- background translucent white circle
+            , if isExtensionPoint diagram dimension point then
+                g
+                    [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (16 -9) scale (0.03)")
+                    , Svg.Attributes.cursor "pointer"
                     ]
-                    []
-                , viewIcon FontAwesome.Solid.arrowCircleRight
-                ]
-            , g
-                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (-45) translate (16 -9) scale (0.03)")
-                , Svg.Attributes.cursor "pointer"
-                ]
-                [ circle
-                    [ r "256"
-                    , fill "yellow"
-                    , cx "256"
-                    , cy "256"
+                    [ circle
+                        [ r "256"
+                        , fill "yellow"
+                        , cx "256"
+                        , cy "256"
+                        , id "right"
+                        ]
+                        []
+                    , viewIcon FontAwesome.Solid.arrowCircleRight
+                    , Svg.title
+                        []
+                        [ text "Extend to next event, at the same level" ]
+                    ] -- right-arrow
+              else
+                g [] []
+            , if isExtensionPoint diagram dimension point && pointToQuantitativeValue point + valueChange <= 1.0 then
+                g
+                    [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (-45) translate (16 -9) scale (0.03)")
+                    , Svg.Attributes.cursor "pointer"
                     ]
-                    []
-                , viewIcon FontAwesome.Solid.arrowCircleRight
-                ] -- top-right
-            , g
-                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (45) translate (16 -9) scale (0.03)")
-                , Svg.Attributes.cursor "pointer"
-                ]
-                [ circle
-                    [ r "256"
-                    , fill "yellow"
-                    , cx "256"
-                    , cy "256"
+                    [ circle
+                        [ r "256"
+                        , fill "yellow"
+                        , cx "256"
+                        , cy "256"
+                        ]
+                        []
+                    , viewIcon FontAwesome.Solid.arrowCircleRight
+                    , Svg.title
+                        []
+                        [ text ("Extend with: " ++ dimension.plus) ]
+                    ] -- top-right
+              else
+                g [] []
+            , if isExtensionPoint diagram dimension point && pointToQuantitativeValue point - valueChange >= -1.0 then
+                g
+                    [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (45) translate (16 -9) scale (0.03)")
+                    , Svg.Attributes.cursor "pointer"
                     ]
-                    []
-                , viewIcon FontAwesome.Solid.arrowCircleRight
-                ] -- bottom-right
-            , g
-                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (-90) translate (16 -9) scale (0.03)")
-                , Svg.Attributes.cursor "pointer"
-                ]
-                [ circle
-                    [ r "256"
-                    , fill "yellow"
-                    , cx "256"
-                    , cy "256"
+                    [ circle
+                        [ r "256"
+                        , fill "yellow"
+                        , cx "256"
+                        , cy "256"
+                        ]
+                        []
+                    , viewIcon FontAwesome.Solid.arrowCircleRight
+                    , Svg.title
+                        []
+                        [ text ("Extend with: " ++ dimension.minus) ]
+                    ] -- bottom-right
+              else
+                g [] []
+            , if pointToQuantitativeValue point + valueChange <= 1.0 then
+                g
+                    [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (-90) translate (16 -9) scale (0.03)")
+                    , Svg.Attributes.cursor "pointer"
                     ]
-                    []
-                , viewIcon FontAwesome.Solid.arrowCircleRight
-                ] -- top
-            , g
-                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (90) translate (16 -9) scale (0.03)")
-                , Svg.Attributes.cursor "pointer"
-                ]
-                [ circle
-                    [ r "256"
-                    , fill "yellow"
-                    , cx "256"
-                    , cy "256"
+                    [ circle
+                        [ r "256"
+                        , fill "yellow"
+                        , cx "256"
+                        , cy "256"
+                        ]
+                        []
+                    , viewIcon FontAwesome.Solid.arrowCircleRight
+                    , Svg.title
+                        []
+                        [ text dimension.plus ]
+                    ] -- top
+              else
+                g [] []
+            , if pointToQuantitativeValue point - valueChange >= -1.0 then
+                g
+                    [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (90) translate (16 -9) scale (0.03)")
+                    , Svg.Attributes.cursor "pointer"
                     ]
-                    []
-                , viewIcon FontAwesome.Solid.arrowCircleRight
-                ] -- bottom
+                    [ circle
+                        [ r "256"
+                        , fill "yellow"
+                        , cx "256"
+                        , cy "256"
+                        ]
+                        []
+                    , viewIcon FontAwesome.Solid.arrowCircleRight
+                    , Svg.title
+                        []
+                        [ text dimension.minus ]
+                    ] -- bottom
+              else
+                g [] []
             , g
                 [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (-26 -16) scale (0.03)")
                 , Svg.Attributes.cursor "pointer"
@@ -535,24 +566,32 @@ drawPointInteractionUI diagram point =
                     ]
                     []
                 , viewIcon FontAwesome.Solid.edit
-                ] -- top-left
+                , Svg.title
+                    []
+                    [ text "Justify/Explain point at this level" ]
+                ] -- edit icon
             , g
                 [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (-26 6) scale (0.03)")
                 , color "red"
                 , Svg.Attributes.cursor "pointer"
                 ]
                 [ viewIcon FontAwesome.Solid.trash
-                ] -- top-left
+                , Svg.title
+                    []
+                    [ text "Delete this point" ]
+                ] -- trash icon
             ]
     )
 
 drawInteractable : Diagram -> Maybe Interactable -> Svg a
 drawInteractable diagram interactable =
-    case interactable of
-        Nothing ->
+    case ( interactable, diagram.focusedDimension ) of
+        ( Nothing, _ ) ->
             g [] []
-        Just (PointInteraction point) ->
-            drawPointInteractionUI diagram point
+        ( _, Nothing ) ->
+            g [] []
+        ( Just (PointInteraction point), Just dim ) ->
+            drawPointInteractionUI diagram (dimensionsToDimension diagram dim) point
     
 svgView : Diagram -> Svg a
 svgView diagram =
