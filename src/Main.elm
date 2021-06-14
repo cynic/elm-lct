@@ -1,21 +1,16 @@
 module Main exposing (..)
-import Html exposing (div, Html)
+import Html exposing (div, Html, button)
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
 import String exposing (fromInt, fromFloat)
-import List exposing (length)
-import String exposing (toInt)
-import Html.Events exposing (onClick)
-import Browser exposing (element)
-import Html exposing (button)
-import Browser.Events exposing (onMouseMove)
+import List
+import Browser
 import Json.Decode as D
 import Svg.Events exposing (on)
 -- height and width of these are 496.625
 import FontAwesome.Solid
 import FontAwesome.Svg exposing (viewIcon)
-import FontAwesome.Styles exposing (css)
-import Html.Attributes exposing (href)
+import Svg.Events exposing (onClick)
 
 iconSize : Float
 iconSize = 512.0
@@ -59,8 +54,17 @@ type alias Configuration =
 -- 5. create a new point at the same level
 -- 6. trash the point
 -- 7. modify/add a description
+type PointInteraction
+    = ShowPointUI
+    | MovePointUp
+    | MovePointDown
+    | ExtendPointUp
+    | ExtendPointDown
+    | ExtendPoint
+    | DeletePoint
+
 type Interactable
-    = PointInteraction Point
+    = InteractablePoint Point
 type alias Diagram =
     { textHeight : Int
     , width : Int
@@ -76,7 +80,7 @@ type alias Diagram =
 type Message
     = PlaceSG
     | FocusOnSG
-    | ShowUIForPoint Point
+    | DoWithPoint PointInteraction Point
     | RemovePointUI
 
 dia_withGraphWidth : Diagram -> (Float -> Float) -> Float
@@ -265,23 +269,113 @@ focusOn dim diagram =
 
 showPointUI : Point -> Diagram -> Diagram
 showPointUI point diagram =
-    { diagram | interactable = Just (PointInteraction point) }
+    { diagram | interactable = Just (InteractablePoint point) }
 
 removePointUI : Diagram -> Diagram
 removePointUI diagram =
     { diagram | interactable = Nothing }
 
+changeFocusedDimension : Diagram -> (Dimension -> Dimension) -> Diagram
+changeFocusedDimension diagram f =
+    case diagram.focusedDimension of
+        Just SG ->
+            { diagram | sg = f diagram.sg }
+        Nothing ->
+            diagram
+
+pointWithValue : (Float -> Float) -> Point -> Point
+pointWithValue f point =
+    case point of
+        Value n v ->
+            Value n (f v)
+        Described n v s ->
+            Described n (f v) s
+
+pointWithEventLine : (EventLine -> EventLine) -> Point -> Point
+pointWithEventLine f point =
+    case point of
+        Value n v ->
+            Value (f n) v
+        Described n v s ->
+            Described (f n) v s
+
+addPointToDimension : Dimension -> Point -> Dimension
+addPointToDimension dimension point =
+    { dimension | points = point :: dimension.points }
+
+changePointInDimension : (Point -> Bool) -> (Point -> Point) -> Dimension -> Dimension
+changePointInDimension predicate f dimension =
+    { dimension | points =
+        List.map (\p ->
+            if predicate p then
+                --pointWithValue (\v -> v + change) point
+                f p
+            else
+                p
+        ) dimension.points
+    }
+
+movePoint : Float -> Point -> Point
+movePoint change point =
+    pointWithValue (\v -> v + change) point
+
+addExtendedPoint : Point -> Dimension -> Dimension
+addExtendedPoint point dimension =
+    pointWithEventLine (\eventLine -> eventLine + 1) point
+    |> addPointToDimension dimension
+
+movePointUp : Point -> Point
+movePointUp =
+    movePoint valueChange
+
+movePointDown : Point -> Point
+movePointDown =
+    movePoint -valueChange
+
+extendPointUp : Point -> Dimension -> Dimension
+extendPointUp point =
+    addExtendedPoint (movePointUp point)
+
+extendPointDown : Point -> Dimension -> Dimension
+extendPointDown point =
+    addExtendedPoint (movePointDown point)
+
+deletePoint : Point -> Dimension -> Dimension
+deletePoint point dimension =
+    { dimension | points = List.filter (\p -> p /= point) dimension.points }
+
+interactivelyChangePointOnDiagram : Diagram -> Point -> (Point -> Point) -> Diagram
+interactivelyChangePointOnDiagram diagram point f =
+    changeFocusedDimension diagram (changePointInDimension ((==) point) f)
+    |> showPointUI (f point)
+
+interactivelyChangeDimensionOnDiagram : Diagram -> (Dimension -> Dimension) -> Diagram
+interactivelyChangeDimensionOnDiagram diagram f =
+    changeFocusedDimension diagram f
+
 update : Message -> Diagram -> (Diagram, Cmd Message)
 update message diagram =
     case message of
-    FocusOnSG ->
-        ( focusOn SG diagram , Cmd.none )
-    PlaceSG ->
-        ( createSGLine diagram, Cmd.none )
-    ShowUIForPoint p ->
-        ( showPointUI p diagram, Cmd.none )
-    RemovePointUI ->
-        ( removePointUI diagram, Cmd.none )
+        FocusOnSG ->
+            ( focusOn SG diagram , Cmd.none )
+        PlaceSG ->
+            ( createSGLine diagram, Cmd.none )
+        DoWithPoint ShowPointUI p ->
+            ( showPointUI p diagram, Cmd.none )
+        DoWithPoint MovePointUp p ->
+            ( interactivelyChangePointOnDiagram diagram p movePointUp, Cmd.none )
+        DoWithPoint MovePointDown p ->
+            ( interactivelyChangePointOnDiagram diagram p movePointDown, Cmd.none )
+        DoWithPoint ExtendPoint p ->
+            ( interactivelyChangeDimensionOnDiagram diagram (addExtendedPoint p), Cmd.none )
+        DoWithPoint ExtendPointUp p ->
+            ( interactivelyChangeDimensionOnDiagram diagram (extendPointUp p), Cmd.none )
+        DoWithPoint ExtendPointDown p ->
+            ( interactivelyChangeDimensionOnDiagram diagram (extendPointDown p), Cmd.none )
+        DoWithPoint DeletePoint p ->
+            ( interactivelyChangeDimensionOnDiagram diagram (deletePoint p), Cmd.none )
+        RemovePointUI ->
+            ( removePointUI diagram, Cmd.none )
 
 pointToQuantitativeValue : Point -> Float
 pointToQuantitativeValue point =
@@ -321,7 +415,7 @@ pointToGraphCoordinates diagram point =
 drawPoint : Diagram -> Point -> Svg a
 drawPoint diagram point =
     case point of
-        Value n v ->
+        Value n _ ->
             circle
                 [ cx (fromFloat (eventLineToGraphX diagram n))
                 , cy (fromFloat (pointToGraphY diagram point))
@@ -330,7 +424,7 @@ drawPoint diagram point =
                 , stroke "black"
                 ]
                 []
-        Described n v description ->
+        Described n _ description ->
             rect
                 [ x (fromFloat (eventLineToGraphX diagram n - 5))
                 , y (fromFloat (pointToGraphY diagram point - 5))
@@ -341,8 +435,8 @@ drawPoint diagram point =
                 ]
                 [ Svg.title [] [ text description ] ]
 
-drawContinuousLine : Diagram -> List ( Float, Float ) -> Svg a
-drawContinuousLine diagram coordinates =
+drawContinuousLine : List ( Float, Float ) -> Svg a
+drawContinuousLine coordinates =
     case coordinates of
         [] ->
             g [] []
@@ -365,9 +459,10 @@ drawContinuousLine diagram coordinates =
                 []
 
 drawLine : Diagram -> List Point -> Svg a
-drawLine diagram points =
-    List.map ( pointToGraphCoordinates diagram ) points
-    |> drawContinuousLine diagram
+drawLine diagram =
+    List.sortBy ( pointToEventLine )
+    >> List.map ( pointToGraphCoordinates diagram )
+    >> drawContinuousLine
 
 drawPoints : Diagram -> List Point -> Svg a
 drawPoints diagram points =
@@ -410,10 +505,12 @@ withinPointRadius diagram =
                 (\coords ->
                     case pointWithinRadius diagram 35 coords dimension.points of
                         Just point ->
-                            D.succeed (ShowUIForPoint point)
+                            D.succeed (DoWithPoint ShowPointUI point)
                         Nothing ->
                             case diagram.interactable of
-                                Just (PointInteraction _) ->
+                                Just (InteractablePoint _) ->
+                                    -- I am outside the radius.
+                                    -- No matter what the Point interaction is, it dies now.
                                     D.succeed RemovePointUI
                                 Nothing ->
                                     D.fail "No point within radius"
@@ -441,9 +538,9 @@ eventLineExists diagram eventLine =
 
 isExtensionPoint : Diagram -> Dimension -> Point -> Bool
 isExtensionPoint diagram dimension point =
-    canExtendFrom dimension point && eventLineExists diagram (pointToEventLine point)
+    canExtendFrom dimension point && eventLineExists diagram (pointToEventLine point + 1)
 
-drawPointInteractionUI : Diagram -> Dimension -> Point -> Svg a
+drawPointInteractionUI : Diagram -> Dimension -> Point -> Svg Message
 drawPointInteractionUI diagram dimension point =
     pointToGraphCoordinates diagram point
     |> (\(x, y) ->
@@ -461,6 +558,7 @@ drawPointInteractionUI diagram dimension point =
                 g
                     [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (16 -9) scale (0.03)")
                     , Svg.Attributes.cursor "pointer"
+                    , onClick (DoWithPoint ExtendPoint point)
                     ]
                     [ circle
                         [ r "256"
@@ -481,6 +579,7 @@ drawPointInteractionUI diagram dimension point =
                 g
                     [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (-45) translate (16 -9) scale (0.03)")
                     , Svg.Attributes.cursor "pointer"
+                    , onClick (DoWithPoint ExtendPointUp point)
                     ]
                     [ circle
                         [ r "256"
@@ -500,6 +599,7 @@ drawPointInteractionUI diagram dimension point =
                 g
                     [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (45) translate (16 -9) scale (0.03)")
                     , Svg.Attributes.cursor "pointer"
+                    , onClick (DoWithPoint ExtendPointDown point)
                     ]
                     [ circle
                         [ r "256"
@@ -519,6 +619,7 @@ drawPointInteractionUI diagram dimension point =
                 g
                     [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (-90) translate (16 -9) scale (0.03)")
                     , Svg.Attributes.cursor "pointer"
+                    , onClick (DoWithPoint MovePointUp point)
                     ]
                     [ circle
                         [ r "256"
@@ -538,6 +639,7 @@ drawPointInteractionUI diagram dimension point =
                 g
                     [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") rotate (90) translate (16 -9) scale (0.03)")
                     , Svg.Attributes.cursor "pointer"
+                    , onClick (DoWithPoint MovePointDown point)
                     ]
                     [ circle
                         [ r "256"
@@ -574,6 +676,7 @@ drawPointInteractionUI diagram dimension point =
                 [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (-26 6) scale (0.03)")
                 , color "red"
                 , Svg.Attributes.cursor "pointer"
+                , onClick (DoWithPoint DeletePoint point)
                 ]
                 [ viewIcon FontAwesome.Solid.trash
                 , Svg.title
@@ -583,17 +686,17 @@ drawPointInteractionUI diagram dimension point =
             ]
     )
 
-drawInteractable : Diagram -> Maybe Interactable -> Svg a
+drawInteractable : Diagram -> Maybe Interactable -> Svg Message
 drawInteractable diagram interactable =
     case ( interactable, diagram.focusedDimension ) of
         ( Nothing, _ ) ->
             g [] []
         ( _, Nothing ) ->
             g [] []
-        ( Just (PointInteraction point), Just dim ) ->
+        ( Just (InteractablePoint point), Just dim ) ->
             drawPointInteractionUI diagram (dimensionsToDimension diagram dim) point
     
-svgView : Diagram -> Svg a
+svgView : Diagram -> Svg Message
 svgView diagram =
   svg
     [ width (fromInt (dia_fullWidth diagram))
@@ -619,7 +722,8 @@ view diagram =
     div
         []
         [ div
-            [ Svg.Events.on "mousemove" (withinPointRadius diagram) ]
+            [ Svg.Events.on "mousemove" (withinPointRadius diagram)
+            ]
             [ svgView diagram ]
         , div
             []
