@@ -146,7 +146,7 @@ sgInit =
     }
 init : Diagram
 init =
-    { textHeight = 250
+    { textHeight = 320
     , width = 800
     , graphHeight = 320
     , events =
@@ -229,7 +229,7 @@ eventText diagram n s =
             , fill "black"
             --, textLength (fromInt diagram.config.eventSpacing ++ "px")
             , fontFamily "Calibri, sans-serif"
-            , fontSize "11pt"
+            , fontSize "14pt"
             ]
             [ text s
             ]
