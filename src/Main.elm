@@ -17,6 +17,8 @@ import Svg.Events exposing (onClick)
 -- TODO: Band colours should be reflective of focused dimension.
 -- TODO: Should be able to add and delete events
 -- TODO: (Limited?) Undo?
+-- TODO: More than one dimension...
+-- TODO: Focus-buttons on SVG itself, no HTML necessary??
 
 iconSize : Float
 iconSize = 512.0
@@ -677,17 +679,20 @@ drawPointInteractionUI diagram dimension point =
                     []
                     [ text "Justify/Explain point at this level" ]
                 ] -- edit icon
-            , g
-                [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (-26 6) scale (0.03)")
-                , color "red"
-                , Svg.Attributes.cursor "pointer"
-                , onClick (DoWithPoint DeletePoint point)
-                ]
-                [ viewIcon FontAwesome.Solid.trash
-                , Svg.title
-                    []
-                    [ text "Delete this point" ]
-                ] -- trash icon
+            , if pointToEventLine point > 0 then
+                g
+                    [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (-26 6) scale (0.03)")
+                    , color "red"
+                    , Svg.Attributes.cursor "pointer"
+                    , onClick (DoWithPoint DeletePoint point)
+                    ]
+                    [ viewIcon FontAwesome.Solid.trash
+                    , Svg.title
+                        []
+                        [ text "Delete this point" ]
+                    ] -- trash icon
+              else
+                g [] []
             ]
     )
 
