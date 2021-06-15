@@ -7,18 +7,19 @@ import List
 import Browser
 import Json.Decode as D
 import Svg.Events exposing (on)
--- height and width of these are 496.625
 import FontAwesome.Solid
 import FontAwesome.Svg exposing (viewIcon)
 import Svg.Events exposing (onClick)
+import GenericDict as Dict exposing (Dict)
 
+-- TODO: Should be able to edit event text
+-- TODO: More than one dimension...
+-- TODO: Focus-buttons on SVG itself, no HTML necessary??
+-- TODO: Descriptions for nodes
 -- TODO: Better bands, which actually reflect the ranges and meanings of the focused dimension
 -- TODO: Better UX for moving a point up and down ... perhaps dragging and/or keypresses?
 -- TODO: Band colours should be reflective of focused dimension.
--- TODO: Should be able to add and delete events
 -- TODO: (Limited?) Undo?
--- TODO: More than one dimension...
--- TODO: Focus-buttons on SVG itself, no HTML necessary??
 
 iconSize : Float
 iconSize = 512.0
@@ -31,6 +32,9 @@ valueChange =
 
 type alias EventLine =
     Int
+
+type alias Event =
+    String
 
 type alias RangeDescription =
     { description : String
@@ -48,7 +52,7 @@ type alias Dimension =
     , minus : String
     }
 
-type Dimensions
+type DimensionName
     = SG
 type alias Band = Int -- which band (0-3) we're drawing
 type alias Configuration =
@@ -71,25 +75,29 @@ type PointInteraction
     | ExtendPoint
     | DeletePoint
 
+type EventInteraction
+    = DeleteEvent
+    | InsertEventAfter
+
 type Interactable
     = InteractablePoint Point
 type alias Diagram =
     { textHeight : Int
     , width : Int
     , graphHeight : Int
-    , events : List (String)
-    , sg : Dimension
+    , events : List Event
+    , dimensions : Dict DimensionName Dimension
     , config : Configuration
-    , focusedDimension : Maybe Dimensions
+    , focusedDimension : Maybe DimensionName
     , interactable : Maybe Interactable
     }
 
 -- Message
 type Message
-    = PlaceSG
-    | FocusOnSG
+    = FocusOn DimensionName
     | DoWithPoint PointInteraction Point
     | RemovePointUI
+    | DoWithEvent EventInteraction EventLine
 
 dia_withGraphWidth : Diagram -> (Float -> Float) -> Float
 dia_withGraphWidth diagram f =
@@ -115,16 +123,35 @@ dia_fullWidth : Diagram -> Int
 dia_fullWidth diagram =
     diagram.width + 30
 
-dimensionsToDimension : Diagram -> Dimensions -> Dimension
-dimensionsToDimension diagram dim =
+dimensionNameToString : DimensionName -> String
+dimensionNameToString dim =
     case dim of
         SG ->
-            diagram.sg
+            "SG"
+
+dimensionNameToDimension : Diagram -> DimensionName -> Maybe Dimension
+dimensionNameToDimension diagram dim =
+    case dim of
+        SG ->
+            dictGet dim diagram.dimensions
+
+dictGet : DimensionName -> Dict DimensionName v -> Maybe v
+dictGet =
+    Dict.get dimensionNameToString
+
+dictInsert : DimensionName -> v -> Dict DimensionName v -> Dict DimensionName v
+dictInsert =
+    Dict.insert dimensionNameToString
 
 defaultConfig : Configuration
 defaultConfig =
     { eventSpacing = 90    
     }
+
+calculateWidth : Diagram -> Diagram
+calculateWidth diagram =
+    -- this is a bit of a thumb-suck and simplificaton, but with any luck, it SHOULD work OK.
+    { diagram | width = diagram.config.eventSpacing * List.length diagram.events + 250 }
 
 sgInit : Dimension
 sgInit =
@@ -142,14 +169,16 @@ sgInit =
           , range = ( 0.5, 1.0 )
           }
         ]
-    , points = [Value 0 0.0, Value 1 0.5, Value 2 0.9, Described 3 1.0 "I ain't so dense, amirite?  Hat.  Hat.", Value 4 -0.9, Value 5 -1.0]
+    , points =
+        [ Value 0 0.0 ]
+        --[Value 0 0.0, Value 1 0.5, Value 2 0.9, Described 3 1.0 "I ain't so dense, amirite?  Hat.  Hat.", Value 4 -0.9, Value 5 -1.0]
     , plus = "Increased abstraction and generalization; less embedded in a specific and concrete context"
     , minus = "Increased binding to a particular context or situation; decreased applicability to many different contexts"
     }
 init : Diagram
 init =
     { textHeight = 320
-    , width = 800
+    , width = 0 -- will be calculated
     , graphHeight = 320
     , events =
         [ "What problem(s) does version control address?"
@@ -160,11 +189,15 @@ init =
         , "Alternative: copy-modify-merge"
         , "Sequence diagram for copy-modify-merge"
         ]
-    , sg = sgInit
+    , dimensions =
+        Dict.fromList dimensionNameToString
+            [ ( SG, sgInit )
+            ]
     , config = defaultConfig
     , focusedDimension = Nothing
     , interactable = Nothing
     }
+    |> calculateWidth
 
 horizAxis : Diagram -> Svg a
 horizAxis diagram =
@@ -174,7 +207,7 @@ horizAxis diagram =
         , x2 (fromFloat (dia_withGraphWidth diagram identity))
         , y2 (fromFloat (dia_withGraphHeight diagram (\h -> h/2)))
         , stroke "black"
-        , strokeWidth "2"
+        , strokeWidth "3"
         ]
         []
 
@@ -197,7 +230,7 @@ eventLineToGraphX diagram n =
     dia_withGraphX diagram (\x -> x + toFloat n * toFloat diagram.config.eventSpacing)
 
 -- event line for event at index /n/
-drawEventLine : Diagram -> Int -> Svg a
+drawEventLine : Diagram -> EventLine -> Svg a
 drawEventLine diagram n =
     line
         [ x1 (fromFloat (eventLineToGraphX diagram n))
@@ -211,8 +244,8 @@ drawEventLine diagram n =
         []
 
 -- event text for event at index /n/, with string /s/
-eventText : Diagram -> EventLine -> String -> Svg a
-eventText diagram n s =
+drawEventText : Diagram -> EventLine -> String -> Svg a
+drawEventText diagram n s =
     g
         [ transform ("rotate(-40, " ++ fromFloat (eventLineToGraphX diagram n) ++ ", " ++ fromFloat (dia_withGraphY diagram identity) ++ ")")
         ]
@@ -237,18 +270,55 @@ eventText diagram n s =
             ]
         ]
 
-event : Diagram -> Int -> String -> Svg a
+drawEventControls : Diagram -> EventLine -> Svg Message
+drawEventControls diagram n =
+    g
+        []
+        [ g
+            [ transform ("translate (" ++ fromFloat (eventLineToGraphX diagram n + 5) ++ " " ++ fromFloat (dia_withGraphHeight diagram identity + 5) ++ ") scale (0.03)")
+            , onClick (DoWithEvent InsertEventAfter n)
+            ]
+            [ rect
+                [ x "60"
+                , y "60"
+                , width "332"
+                , height "342"
+                , fill "white"
+                ]
+                []
+            , viewIcon FontAwesome.Solid.plusSquare
+            , Svg.title
+                []
+                [ text "Insert new event" ]
+            ]
+        , if n > 0 then
+            g
+                [ transform ("translate (" ++ fromFloat (eventLineToGraphX diagram n - 20) ++ " " ++ fromFloat (dia_withGraphHeight diagram identity + 5) ++ ") scale (0.03)")
+                , onClick (DoWithEvent DeleteEvent n)
+                ]
+                [ viewIcon FontAwesome.Solid.trash
+                , Svg.title
+                    []
+                    [ text "Delete event" ]
+                ]
+          else
+            g [] []
+        ]
+
+event : Diagram -> EventLine -> String -> Svg Message
 event diagram n s =
     g
         []
         [ drawEventLine diagram n
-        , eventText diagram n s
+        , drawEventText diagram n s
+        , drawEventControls diagram n
         ]
 
-drawEvents : Diagram -> List (Svg a)
+drawEvents : Diagram -> Svg Message
 drawEvents diagram =
-    List.indexedMap (event diagram) diagram.events
-
+    g
+        []
+        (List.indexedMap (event diagram) diagram.events)
 band : Diagram -> Band -> Svg a
 band diagram n =
     let
@@ -267,11 +337,7 @@ band diagram n =
             ]
             []
 
-createSGLine : Diagram -> Diagram
-createSGLine diagram =
-    { diagram | sg = { sgInit | points = [ Value 0 0.0 ] } }
-
-focusOn : Dimensions -> Diagram -> Diagram
+focusOn : DimensionName -> Diagram -> Diagram
 focusOn dim diagram =
     { diagram | focusedDimension = Just dim }
 
@@ -286,8 +352,12 @@ removePointUI diagram =
 changeFocusedDimension : Diagram -> (Dimension -> Dimension) -> Diagram
 changeFocusedDimension diagram f =
     case diagram.focusedDimension of
-        Just SG ->
-            { diagram | sg = f diagram.sg }
+        Just dim ->
+            case dictGet dim diagram.dimensions of
+                Nothing ->
+                    diagram
+                Just dimension ->
+                    { diagram | dimensions = dictInsert dim (f dimension) diagram.dimensions }
         Nothing ->
             diagram
 
@@ -332,21 +402,21 @@ addExtendedPoint point dimension =
     pointWithEventLine (\eventLine -> eventLine + 1) point
     |> addPointToDimension dimension
 
-movePointUp : Point -> Point
-movePointUp =
-    movePoint valueChange
+movePointUp : Float -> Point -> Point
+movePointUp change =
+    movePoint change
 
-movePointDown : Point -> Point
-movePointDown =
-    movePoint -valueChange
+movePointDown : Float -> Point -> Point
+movePointDown change =
+    movePoint -change
 
 extendPointUp : Point -> Dimension -> Dimension
 extendPointUp point =
-    addExtendedPoint (movePointUp point)
+    addExtendedPoint (movePointUp (valueChange * 2) point)
 
 extendPointDown : Point -> Dimension -> Dimension
 extendPointDown point =
-    addExtendedPoint (movePointDown point)
+    addExtendedPoint (movePointDown (valueChange * 2) point)
 
 deletePoint : Point -> Dimension -> Dimension
 deletePoint point dimension =
@@ -361,19 +431,76 @@ interactivelyChangeDimensionOnDiagram : Diagram -> (Dimension -> Dimension) -> D
 interactivelyChangeDimensionOnDiagram diagram f =
     changeFocusedDimension diagram f
 
+insertEventAfter : Diagram -> EventLine -> Diagram
+insertEventAfter diagram n =
+    let
+        newEvents =
+            List.concat
+                [ List.take (n+1) diagram.events
+                , ["New event"]
+                , List.drop (n+1) diagram.events
+                ]
+        newDimensions =
+            Dict.map (\_ dimension ->
+                { dimension | points =
+                    List.map
+                        (\point ->
+                            if pointToEventLine point > n then
+                                pointWithEventLine (\eventLine -> eventLine + 1) point
+                            else
+                                point
+                        )
+                        dimension.points
+                }
+            ) diagram.dimensions
+        
+    in
+    { diagram | events = newEvents, dimensions = newDimensions }
+    |> calculateWidth
+
+deleteEvent : Diagram -> EventLine -> Diagram
+deleteEvent diagram n =
+    let
+        newEvents =
+            List.concat
+                [ List.take n diagram.events
+                , List.drop (n+1) diagram.events
+                ]
+        newDimensions =
+            -- Two functions:
+            -- 1. Remove all points that are being used with this event.
+            -- 2. Shift the event-references of all subsequent points back by 1.
+            Dict.map (\_ dimension ->
+                { dimension | points =
+                    List.filterMap
+                        (\point ->
+                            if pointToEventLine point == n then
+                                Nothing
+                            else if pointToEventLine point > n then
+                                Just <| pointWithEventLine (\eventLine -> eventLine - 1) point
+                            else
+                                Just point
+                        )
+                        dimension.points
+                }
+            ) diagram.dimensions
+    in
+        -- out of an abundance of caution (and laziness!), set the interactable as Nothing too.
+        -- Perhaps it was displaying a Point that is now gone.
+        { diagram | events = newEvents, dimensions = newDimensions, interactable = Nothing }
+        |> calculateWidth
+
 update : Message -> Diagram -> (Diagram, Cmd Message)
 update message diagram =
     case message of
-        FocusOnSG ->
-            ( focusOn SG diagram , Cmd.none )
-        PlaceSG ->
-            ( createSGLine diagram, Cmd.none )
+        FocusOn dimension ->
+            ( focusOn dimension diagram , Cmd.none )
         DoWithPoint ShowPointUI p ->
             ( showPointUI p diagram, Cmd.none )
         DoWithPoint MovePointUp p ->
-            ( interactivelyChangePointOnDiagram diagram p movePointUp, Cmd.none )
+            ( interactivelyChangePointOnDiagram diagram p (movePointUp valueChange), Cmd.none )
         DoWithPoint MovePointDown p ->
-            ( interactivelyChangePointOnDiagram diagram p movePointDown, Cmd.none )
+            ( interactivelyChangePointOnDiagram diagram p (movePointDown valueChange), Cmd.none )
         DoWithPoint ExtendPoint p ->
             ( interactivelyChangeDimensionOnDiagram diagram (addExtendedPoint p), Cmd.none )
         DoWithPoint ExtendPointUp p ->
@@ -384,6 +511,10 @@ update message diagram =
             ( interactivelyChangeDimensionOnDiagram diagram (deletePoint p), Cmd.none )
         RemovePointUI ->
             ( removePointUI diagram, Cmd.none )
+        DoWithEvent InsertEventAfter n ->
+            ( insertEventAfter diagram n, Cmd.none )
+        DoWithEvent DeleteEvent n ->
+            ( deleteEvent diagram n, Cmd.none )
 
 pointToQuantitativeValue : Point -> Float
 pointToQuantitativeValue point =
@@ -455,7 +586,7 @@ drawContinuousLine diagram coordinates =
                 [ d
                     ( List.foldl (\(x, y) state ->
                         state
-                        ++ fromFloat (x - (toFloat diagram.config.eventSpacing / 2)) ++ " " ++ fromFloat y ++ ", "
+                        ++ fromFloat (x - (toFloat diagram.config.eventSpacing / 3)) ++ " " ++ fromFloat y ++ ", "
                         ++ fromFloat x ++ " " ++ fromFloat y ++ " "
                     ) ("M " ++ fromFloat ix ++ " " ++ fromFloat iy ++ " S ") coordinates
                     )
@@ -501,7 +632,7 @@ pointWithinRadius diagram radius (x, y) points =
 
 withinPointRadius : Diagram -> D.Decoder Message
 withinPointRadius diagram =
-    case diagram.focusedDimension |> Maybe.map (dimensionsToDimension diagram) of
+    case diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
         Nothing ->
             D.fail "No focused dimension"
         Just dimension ->
@@ -698,14 +829,42 @@ drawPointInteractionUI diagram dimension point =
 
 drawInteractable : Diagram -> Maybe Interactable -> Svg Message
 drawInteractable diagram interactable =
-    case ( interactable, diagram.focusedDimension ) of
+    case ( interactable, diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) ) of
         ( Nothing, _ ) ->
             g [] []
         ( _, Nothing ) ->
             g [] []
-        ( Just (InteractablePoint point), Just dim ) ->
-            drawPointInteractionUI diagram (dimensionsToDimension diagram dim) point
-    
+        ( Just (InteractablePoint point), Just dimension ) ->
+            drawPointInteractionUI diagram dimension point
+
+sortByFocused : Diagram -> List Dimension -> List Dimension
+sortByFocused diagram dimensions =
+    case diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
+        Nothing ->
+            dimensions
+        Just focused ->
+            List.sortBy (\dimension -> if dimension == focused then 1 else 0) dimensions
+
+drawDimensionsLines : Diagram -> Svg a
+drawDimensionsLines diagram =
+    g
+        []
+        ( Dict.values diagram.dimensions
+          |> sortByFocused diagram
+          |> List.map (\dimension -> dimension.points)
+          |> List.map (drawLine diagram)
+        )
+
+drawDimensionsPoints : Diagram -> Svg a
+drawDimensionsPoints diagram =
+    g
+        []
+        ( Dict.values diagram.dimensions
+          |> sortByFocused diagram
+          |> List.map (\dimension -> dimension.points)
+          |> List.map (drawPoints diagram)
+        )
+
 svgView : Diagram -> Svg Message
 svgView diagram =
   svg
@@ -719,12 +878,10 @@ svgView diagram =
     , band diagram 3
     , horizAxis diagram
     , vertAxis diagram
-    , g
-        []
-        (drawEvents diagram)
-    , drawLine diagram diagram.sg.points
+    , drawEvents diagram
+    , drawDimensionsLines diagram
     , drawInteractable diagram diagram.interactable
-    , drawPoints diagram diagram.sg.points
+    , drawDimensionsPoints diagram
     ]
 
 view : Diagram -> Html Message
@@ -737,15 +894,9 @@ view diagram =
             [ svgView diagram ]
         , div
             []
-            [ case diagram.sg.points of
-              [] ->
-                button
-                    [ onClick PlaceSG ]
-                    [ text "Create SG" ]
-              _ ->
-                button
-                    [ onClick FocusOnSG ]
-                    [ text "Focus on SG" ]
+            [ button
+                [ onClick (FocusOn SG) ]
+                [ text "Focus on SG" ]
             ]
         ]
 
