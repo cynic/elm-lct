@@ -4,6 +4,7 @@ import Svg exposing (..)
 import Svg.Attributes exposing (..)
 import String exposing (fromInt, fromFloat)
 import List
+import Dict as ElmDict
 import Browser
 import Json.Decode as D
 import Svg.Events exposing (on)
@@ -11,8 +12,8 @@ import FontAwesome.Solid
 import FontAwesome.Svg exposing (viewIcon)
 import Svg.Events exposing (onClick)
 import GenericDict as Dict exposing (Dict)
+import Browser.Events
 
--- TODO: Should be able to edit event text
 -- TODO: More than one dimension...
 -- TODO: Focus-buttons on SVG itself, no HTML necessary??
 -- TODO: Descriptions for nodes
@@ -35,6 +36,40 @@ type alias EventLine =
 
 type alias Event =
     String
+
+type alias MaxLength =
+    Int
+
+type CursorPosition
+    = Start
+    | End
+    | AfterIndex Int
+
+type alias TextData =
+    { maxLength : MaxLength
+    , current : String
+    , cursor : CursorPosition
+    }
+
+type TextCursorChange
+    = CursorToStart
+    | CursorToEnd
+    | CursorRight
+    | CursorLeft
+
+type TextRemoval
+    = DeleteLeft
+    | DeleteRight
+
+type TextDecision
+    = Accept
+    | Cancel
+
+type TextAction
+    = CursorChange TextCursorChange
+    | Removal TextRemoval
+    | Decision TextDecision
+    | Key String
 
 type alias RangeDescription =
     { description : String
@@ -78,9 +113,14 @@ type PointInteraction
 type EventInteraction
     = DeleteEvent
     | InsertEventAfter
+    | EditText TextData
+
+type PostTextEdit
+    = StoreEventText EventLine
 
 type Interactable
     = InteractablePoint Point
+    | InteractableText TextData PostTextEdit
 type alias Diagram =
     { textHeight : Int
     , width : Int
@@ -98,6 +138,7 @@ type Message
     | DoWithPoint PointInteraction Point
     | RemovePointUI
     | DoWithEvent EventInteraction EventLine
+    | UpdateText TextAction
 
 dia_withGraphWidth : Diagram -> (Float -> Float) -> Float
 dia_withGraphWidth diagram f =
@@ -151,7 +192,7 @@ defaultConfig =
 calculateWidth : Diagram -> Diagram
 calculateWidth diagram =
     -- this is a bit of a thumb-suck and simplificaton, but with any luck, it SHOULD work OK.
-    { diagram | width = diagram.config.eventSpacing * List.length diagram.events + 250 }
+    { diagram | width = diagram.config.eventSpacing * List.length diagram.events + 260 }
 
 sgInit : Dimension
 sgInit =
@@ -175,6 +216,7 @@ sgInit =
     , plus = "Increased abstraction and generalization; less embedded in a specific and concrete context"
     , minus = "Increased binding to a particular context or situation; decreased applicability to many different contexts"
     }
+
 init : Diagram
 init =
     { textHeight = 320
@@ -244,7 +286,7 @@ drawEventLine diagram n =
         []
 
 -- event text for event at index /n/, with string /s/
-drawEventText : Diagram -> EventLine -> String -> Svg a
+drawEventText : Diagram -> EventLine -> String -> Svg Message
 drawEventText diagram n s =
     g
         [ transform ("rotate(-40, " ++ fromFloat (eventLineToGraphX diagram n) ++ ", " ++ fromFloat (dia_withGraphY diagram identity) ++ ")")
@@ -259,7 +301,7 @@ drawEventText diagram n s =
             ]
             []
         , text_
-            [ x (fromFloat (eventLineToGraphX diagram n))
+            [ x (fromFloat (eventLineToGraphX diagram n + 8))
             , y (fromFloat (dia_withGraphY diagram identity))
             , fill "black"
             --, textLength (fromInt diagram.config.eventSpacing ++ "px")
@@ -267,6 +309,20 @@ drawEventText diagram n s =
             , fontSize "14pt"
             ]
             [ text s
+            ]
+        , g
+            [ transform ("translate (" ++ fromFloat (eventLineToGraphX diagram n + 50) ++ " " ++ fromFloat (dia_withGraphY diagram identity + 5) ++ ") scale (0.03)")
+            , onClick (DoWithEvent (EditText { maxLength = 60, current = s, cursor = End }) n)
+            ]
+            [ rect
+                    [ Svg.Attributes.x "0"
+                    , Svg.Attributes.y "50"
+                    , width "462"
+                    , height "462"
+                    , fill "white"
+                    ]
+                    []
+            , viewIcon FontAwesome.Solid.edit
             ]
         ]
 
@@ -345,8 +401,8 @@ showPointUI : Point -> Diagram -> Diagram
 showPointUI point diagram =
     { diagram | interactable = Just (InteractablePoint point) }
 
-removePointUI : Diagram -> Diagram
-removePointUI diagram =
+removeInteractableUI : Diagram -> Diagram
+removeInteractableUI diagram =
     { diagram | interactable = Nothing }
 
 changeFocusedDimension : Diagram -> (Dimension -> Dimension) -> Diagram
@@ -490,6 +546,148 @@ deleteEvent diagram n =
         { diagram | events = newEvents, dimensions = newDimensions, interactable = Nothing }
         |> calculateWidth
 
+handleTextDecision : Diagram -> TextDecision -> PostTextEdit -> TextData -> Diagram
+handleTextDecision diagram decision postAction textData =
+    case decision of 
+        Accept ->
+            case postAction of
+                StoreEventText eventLine ->
+                    { diagram | events =
+                        List.indexedMap (\i e ->
+                            if i == eventLine then
+                                textData.current
+                            else
+                                e
+                        ) diagram.events
+                    } |> removeInteractableUI
+        Cancel ->
+            removeInteractableUI diagram
+
+handleTextRemoval : TextRemoval -> TextData -> TextData
+handleTextRemoval removal textData =
+    case removal of
+        DeleteLeft ->
+            case textData.cursor of
+                End ->
+                    if String.length textData.current > 0 then
+                        { textData | current = String.left (String.length textData.current - 1) textData.current }
+                    else
+                        textData
+                Start ->
+                    textData
+                AfterIndex 0 ->
+                    { textData
+                    | current = String.dropLeft 1 textData.current
+                    , cursor = Start
+                    }
+                AfterIndex n ->
+                    { textData
+                    | current = String.left n textData.current ++ String.dropLeft (n + 1) textData.current
+                    , cursor = AfterIndex (n - 1)
+                    }
+        DeleteRight ->
+            case textData.cursor of
+                End ->
+                    textData
+                Start ->
+                    { textData | current = String.dropLeft 1 textData.current }
+                AfterIndex n ->
+                    if n + 1 == String.length textData.current then
+                        { textData
+                        | current = String.left n textData.current
+                        , cursor = End
+                        }
+                    else
+                        { textData
+                        | current = String.left (n + 1) textData.current ++ String.dropLeft (n + 2) textData.current
+                        }
+
+handleTextCursor : TextCursorChange -> TextData -> TextData
+handleTextCursor cursorChange textData =
+    case cursorChange of
+        CursorToStart ->
+            if String.length textData.current == 0 then
+                { textData | cursor = End }
+            else
+                { textData | cursor = Start }
+        CursorToEnd ->
+            { textData | cursor = End }
+        CursorLeft ->
+            case textData.cursor of
+                End ->
+                    if String.length textData.current == 0 then
+                        { textData | cursor = End }
+                    else if String.length textData.current == 1 then
+                        { textData | cursor = Start }
+                    else
+                        { textData | cursor = AfterIndex <| String.length textData.current - 1 }
+                Start ->
+                    textData
+                AfterIndex 0 ->
+                    { textData | cursor = Start }
+                AfterIndex n ->
+                    { textData | cursor = AfterIndex (n - 1) }
+        CursorRight ->
+            case textData.cursor of
+                End ->
+                    textData
+                Start ->
+                    { textData | cursor = AfterIndex 0 }
+                AfterIndex n ->
+                    if n + 1 == String.length textData.current then
+                        { textData | cursor = End }
+                    else
+                        { textData | cursor = AfterIndex (n + 1) }
+
+handleTextInput : String -> TextData -> TextData
+handleTextInput s textData =
+    if String.length textData.current >= textData.maxLength then
+        textData
+    else
+        case textData.cursor of
+            End ->
+                { textData | current = textData.current ++ s }
+            Start ->
+                { textData
+                | current = s ++ textData.current
+                , cursor = AfterIndex 0
+                }
+            AfterIndex n ->
+                { textData
+                | current = String.left (n + 1) textData.current ++ s ++ String.dropLeft (n + 1) textData.current
+                , cursor = AfterIndex (n + 1)
+                }
+
+handleTextAction : Diagram -> TextAction -> PostTextEdit -> TextData -> Diagram
+handleTextAction diagram textAction postAction textData =
+    case textAction of
+        Decision decision ->
+            handleTextDecision diagram decision postAction textData
+        Removal removal ->
+            { diagram | interactable =
+                Just ( InteractableText (handleTextRemoval removal textData) postAction )
+            }
+        CursorChange cursorChange ->
+            { diagram | interactable =
+                Just ( InteractableText (handleTextCursor cursorChange textData) postAction )
+            }
+        Key key ->
+            { diagram | interactable =
+                Just ( InteractableText (handleTextInput key textData) postAction )
+            }
+
+updateText : Diagram -> TextAction -> Diagram
+updateText diagram textAction =
+    case diagram.interactable of
+        Just ( InteractableText textData postAction ) ->
+            handleTextAction diagram textAction postAction textData
+        _ ->
+            diagram
+
+showTextEditor : Diagram -> TextData -> PostTextEdit -> Diagram
+showTextEditor diagram textData postAction =
+    { diagram | interactable = Just ( InteractableText textData postAction ) }
+
 update : Message -> Diagram -> (Diagram, Cmd Message)
 update message diagram =
     case message of
@@ -510,11 +708,15 @@ update message diagram =
         DoWithPoint DeletePoint p ->
             ( interactivelyChangeDimensionOnDiagram diagram (deletePoint p), Cmd.none )
         RemovePointUI ->
-            ( removePointUI diagram, Cmd.none )
+            ( removeInteractableUI diagram, Cmd.none )
         DoWithEvent InsertEventAfter n ->
             ( insertEventAfter diagram n, Cmd.none )
         DoWithEvent DeleteEvent n ->
             ( deleteEvent diagram n, Cmd.none )
+        DoWithEvent (EditText textData) n ->
+            ( showTextEditor diagram textData (StoreEventText n), Cmd.none )
+        UpdateText textAction ->
+            ( updateText diagram textAction, Cmd.none )
 
 pointToQuantitativeValue : Point -> Float
 pointToQuantitativeValue point =
@@ -616,43 +818,6 @@ first predicate list =
                 Just h
             else
                 first predicate rest
-
-pointWithinRadius : Diagram -> Int -> (Int, Int) -> List Point -> Maybe Point
-pointWithinRadius diagram radius (x, y) points =
-    first
-        (\point ->
-            let
-                (px, py) = pointToGraphCoordinates diagram point
-                dx = px - toFloat x
-                dy = py - toFloat y
-            in
-                sqrt (dx * dx + dy * dy) <= toFloat radius                
-        )
-        points
-
-withinPointRadius : Diagram -> D.Decoder Message
-withinPointRadius diagram =
-    case diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
-        Nothing ->
-            D.fail "No focused dimension"
-        Just dimension ->
-            D.map2 (\x y -> (x, y))
-                (D.field "clientX" D.int)
-                (D.field "clientY" D.int)
-            |> D.andThen
-                (\coords ->
-                    case pointWithinRadius diagram 35 coords dimension.points of
-                        Just point ->
-                            D.succeed (DoWithPoint ShowPointUI point)
-                        Nothing ->
-                            case diagram.interactable of
-                                Just (InteractablePoint _) ->
-                                    -- I am outside the radius.
-                                    -- No matter what the Point interaction is, it dies now.
-                                    D.succeed RemovePointUI
-                                Nothing ->
-                                    D.fail "No point within radius"
-                )
 
 -- is this a point that can be extended to the next event line?
 --   - In other words: is there already a point n+1 ??
@@ -827,15 +992,108 @@ drawPointInteractionUI diagram dimension point =
             ]
     )
 
+drawInteractableText : Diagram -> TextData -> Svg Message
+drawInteractableText diagram textData =
+    let
+        avgCharWidth = 8
+    -- assume a length of about ... 4? ... for each character
+    in
+        g
+            []
+            [ rect
+                [ x (fromFloat (dia_withGraphWidth diagram (\w -> w / 2 - avgCharWidth * toFloat textData.maxLength / 2 - 5)))
+                , y (fromFloat (dia_withGraphHeight diagram (\h -> h / 2 - 15)))
+                , width (fromFloat (toFloat textData.maxLength * avgCharWidth + 10))
+                , height "30"
+                , rx "4"
+                , fill "#bbba"
+                ]
+                []
+            , rect
+                [ x (fromFloat (dia_withGraphWidth diagram (\w -> w / 2 - avgCharWidth * toFloat textData.maxLength / 2)))
+                , y (fromFloat (dia_withGraphHeight diagram (\h -> h / 2 - 10)))
+                , width (fromFloat (toFloat textData.maxLength * avgCharWidth))
+                , height "20"
+                , rx "4"
+                , fill "white"
+                ]
+                []
+            , text_
+                [ x (fromFloat (dia_withGraphWidth diagram (\w -> w / 2 - avgCharWidth * toFloat textData.maxLength / 2 + 2)))
+                , y (fromFloat (dia_withGraphHeight diagram (\h -> h / 2 + 8)))
+                , fill "black"
+                , fontFamily "Calibri, sans-serif"
+                , fontSize "14pt"
+                ]
+                (
+                    let
+                        cursorAnimation =
+                            animate
+                                [ attributeName "fill"
+                                , values "black;transparent"
+                                , dur "0.8s"
+                                , calcMode "discrete"
+                                , repeatCount "indefinite"
+                                ]
+                                []
+                        cursor =
+                            tspan
+                                [ fontSize "18pt"
+                                , dy "2"
+                                , dx "-2"
+                                ]
+                                [ text "I"
+                                , cursorAnimation
+                                ]
+                        cursorAtStart =
+                            tspan
+                                [ fontSize "18pt"
+                                , dx "-2"
+                                ]
+                                [ text "I"
+                                , cursorAnimation
+                                ]
+                        textyPre s =
+                            tspan
+                                [ dy "-2" ]
+                                [ text s ]
+                        textyPost s =
+                            tspan
+                                [ dy "-2"
+                                , dx "-4"
+                                ]
+                                [ text s ]
+                    in
+                        case textData.cursor of
+                            Start ->
+                                [ cursorAtStart
+                                , textyPost textData.current
+                                ]
+                            End ->
+                                [ textyPre textData.current
+                                , cursor
+                                ]
+                            AfterIndex n ->
+                                [ textyPre (String.left (n + 1) textData.current)
+                                , cursor
+                                , textyPost (String.dropLeft (n + 1) textData.current)
+                                ]
+                )
+            ]
+
 drawInteractable : Diagram -> Maybe Interactable -> Svg Message
 drawInteractable diagram interactable =
-    case ( interactable, diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) ) of
-        ( Nothing, _ ) ->
+    case interactable of
+        Nothing ->
             g [] []
-        ( _, Nothing ) ->
-            g [] []
-        ( Just (InteractablePoint point), Just dimension ) ->
-            drawPointInteractionUI diagram dimension point
+        Just (InteractablePoint point) ->
+            case diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
+                Just dimension ->
+                    drawPointInteractionUI diagram dimension point
+                Nothing ->
+                    g [] []
+        Just (InteractableText textData _) ->
+            drawInteractableText diagram textData
 
 sortByFocused : Diagram -> List Dimension -> List Dimension
 sortByFocused diagram dimensions =
@@ -884,12 +1142,106 @@ svgView diagram =
     , drawDimensionsPoints diagram
     ]
 
+pointWithinRadius : Diagram -> Int -> (Int, Int) -> List Point -> Maybe Point
+pointWithinRadius diagram radius (x, y) points =
+    first
+        (\point ->
+            let
+                (px, py) = pointToGraphCoordinates diagram point
+                dx = px - toFloat x
+                dy = py - toFloat y
+            in
+                sqrt (dx * dx + dy * dy) <= toFloat radius                
+        )
+        points
+
+withinPointRadius : Diagram -> D.Decoder Message
+withinPointRadius diagram =
+    case diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
+        Nothing ->
+            D.fail "No focused dimension"
+        Just dimension ->
+            D.map2 (\x y -> (x, y))
+                (D.field "clientX" D.int)
+                (D.field "clientY" D.int)
+            |> D.andThen
+                (\coords ->
+                    case pointWithinRadius diagram 35 coords dimension.points of
+                        Just point ->
+                            D.succeed (DoWithPoint ShowPointUI point)
+                        Nothing ->
+                            case diagram.interactable of
+                                Just (InteractablePoint _) ->
+                                    -- I am outside the radius.
+                                    -- No matter what the Point interaction is, it dies now.
+                                    D.succeed RemovePointUI
+                                Just (InteractableText _ _) ->
+                                    D.fail "In the middle of a text interaction - ignoring point interactions for now"
+                                Nothing ->
+                                    D.fail "No point within radius"
+                )
+
+keyToTextAction : String -> Maybe TextAction
+keyToTextAction s =
+    let
+        specialKeys =
+            ElmDict.fromList
+                [ ( "Home", CursorChange CursorToStart )
+                , ( "End", CursorChange CursorToEnd )
+                , ( "ArrowRight", CursorChange CursorRight )
+                , ( "ArrowLeft", CursorChange CursorLeft )
+                , ( "Right", CursorChange CursorRight )
+                , ( "Left", CursorChange CursorLeft )
+                , ( "Backspace", Removal DeleteLeft )
+                , ( "Delete", Removal DeleteRight )
+                , ( "Accept", Decision Accept )
+                , ( "Enter", Decision Accept )
+                , ( "Finish", Decision Accept )
+                , ( "Save", Decision Accept )
+                , ( "Cancel", Decision Cancel )
+                , ( "Escape", Decision Cancel )
+                , ( "GoBack", Decision Cancel )
+                , ( "Close", Decision Cancel )
+                ]
+    in
+        if String.length s == 1 then
+            Just (Key s)
+        else
+            ElmDict.get s specialKeys
+    
+
+interpretKeypress : Diagram -> D.Decoder Message
+interpretKeypress diagram =
+    case diagram.interactable of
+        Just (InteractableText _ _) ->
+            D.map4 (\ctrl alt composing meta -> ctrl || alt || composing || meta)
+                (D.field "altKey" D.bool)
+                (D.field "ctrlKey" D.bool)
+                (D.field "isComposing" D.bool)
+                (D.field "metaKey" D.bool)
+            |> D.andThen (\shouldIgnore ->
+                if shouldIgnore then
+                    D.fail <| Debug.log "X" "Ctrl, Alt, Composing, or Meta is active.  Ignoring."
+                else
+                    D.field "key" D.string
+                    |> D.andThen (\key ->
+                        case keyToTextAction key of
+                            Nothing ->
+                                D.fail (Debug.log "Interpreting keypress" <| "No matching key for input: " ++ key)
+                            Just textAction ->
+                                D.succeed (UpdateText textAction)
+                    )
+            )
+        _ ->
+            D.fail <| Debug.log "Y" "No text-editing interaction active"
+
 view : Diagram -> Html Message
 view diagram =
     div
-        []
+        [ --Svg.Events.on "keydown" (interpretKeypress diagram)
+        ]
         [ div
-            [ Svg.Events.on "mousemove" (withinPointRadius diagram)
+            [ Svg.Events.on "mousemove" (withinPointRadius diagram)            
             ]
             [ svgView diagram ]
         , div
@@ -900,11 +1252,19 @@ view diagram =
             ]
         ]
 
+subscriptions : Diagram -> Sub Message
+subscriptions diagram =
+    case diagram.interactable of
+        Just ( InteractableText _ _ ) ->
+            Browser.Events.onKeyDown (interpretKeypress diagram)
+        _ ->
+            Sub.none
+
 main : Program () Diagram Message
 main =
     Browser.element
         { init = \_ -> (init, Cmd.none)
         , view = view
         , update = update
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = subscriptions
         }
