@@ -109,18 +109,21 @@ type PointInteraction
     | ExtendPointDown
     | ExtendPoint
     | DeletePoint
+    | EditPointText
 
 type EventInteraction
     = DeleteEvent
     | InsertEventAfter
-    | EditText TextData
+    | EditEventText TextData
 
 type PostTextEdit
     = StoreEventText EventLine
+    | StorePointText DimensionName Point
 
 type Interactable
     = InteractablePoint Point
     | InteractableText TextData PostTextEdit
+
 type alias Diagram =
     { textHeight : Int
     , width : Int
@@ -312,7 +315,7 @@ drawEventText diagram n s =
             ]
         , g
             [ transform ("translate (" ++ fromFloat (eventLineToGraphX diagram n + 50) ++ " " ++ fromFloat (dia_withGraphY diagram identity + 5) ++ ") scale (0.03)")
-            , onClick (DoWithEvent (EditText { maxLength = 60, current = s, cursor = End }) n)
+            , onClick (DoWithEvent (EditEventText { maxLength = 60, current = s, cursor = End }) n)
             ]
             [ rect
                     [ Svg.Attributes.x "0"
@@ -405,15 +408,20 @@ removeInteractableUI : Diagram -> Diagram
 removeInteractableUI diagram =
     { diagram | interactable = Nothing }
 
+changeDimension : DimensionName -> Diagram -> (Dimension -> Dimension) -> Diagram
+changeDimension dimensionName diagram f =
+    case dictGet dimensionName diagram.dimensions of
+        Nothing ->
+            diagram
+        Just dimension ->
+            { diagram | dimensions = dictInsert dimensionName (f dimension) diagram.dimensions }
+
 changeFocusedDimension : Diagram -> (Dimension -> Dimension) -> Diagram
+
 changeFocusedDimension diagram f =
     case diagram.focusedDimension of
         Just dim ->
-            case dictGet dim diagram.dimensions of
-                Nothing ->
-                    diagram
-                Just dimension ->
-                    { diagram | dimensions = dictInsert dim (f dimension) diagram.dimensions }
+            changeDimension dim diagram f
         Nothing ->
             diagram
 
@@ -546,11 +554,26 @@ deleteEvent diagram n =
         { diagram | events = newEvents, dimensions = newDimensions, interactable = Nothing }
         |> calculateWidth
 
+pointWithText : String -> Point -> Point
+pointWithText s point =
+    if String.length s > 0 then
+        case point of
+            Described n v _ ->
+                Described n v s
+            Value n v ->
+                Described n v s
+    else
+        case point of
+            Described n v _ ->
+                Value n v
+            Value _ _ ->
+                point
+
 handleTextDecision : Diagram -> TextDecision -> PostTextEdit -> TextData -> Diagram
 handleTextDecision diagram decision postAction textData =
     case decision of 
         Accept ->
-            case postAction of
+            ( case postAction of
                 StoreEventText eventLine ->
                     { diagram | events =
                         List.indexedMap (\i e ->
@@ -559,7 +582,11 @@ handleTextDecision diagram decision postAction textData =
                             else
                                 e
                         ) diagram.events
-                    } |> removeInteractableUI
+                    }
+                StorePointText dimensionName point ->
+                    changeDimension dimensionName diagram
+                        (changePointInDimension ((==) point) (pointWithText textData.current))
+            ) |> removeInteractableUI      
         Cancel ->
             removeInteractableUI diagram
 
@@ -688,6 +715,25 @@ showTextEditor : Diagram -> TextData -> PostTextEdit -> Diagram
 showTextEditor diagram textData postAction =
     { diagram | interactable = Just ( InteractableText textData postAction ) }
 
+pointToText : Point -> String
+pointToText point =
+    case point of
+        Value _ _ ->
+            ""
+        Described _ _ s ->
+            s
+
+editPointText : Diagram -> Point -> Diagram
+editPointText diagram point =
+    case diagram.focusedDimension of
+        Just dimensionName ->
+            showTextEditor
+                diagram
+                { current = pointToText point, cursor = End, maxLength = 80 }
+                (StorePointText dimensionName point)
+        Nothing ->
+            diagram
+
 update : Message -> Diagram -> (Diagram, Cmd Message)
 update message diagram =
     case message of
@@ -707,13 +753,15 @@ update message diagram =
             ( interactivelyChangeDimensionOnDiagram diagram (extendPointDown p), Cmd.none )
         DoWithPoint DeletePoint p ->
             ( interactivelyChangeDimensionOnDiagram diagram (deletePoint p), Cmd.none )
+        DoWithPoint EditPointText p ->
+            ( editPointText diagram p, Cmd.none )
         RemovePointUI ->
             ( removeInteractableUI diagram, Cmd.none )
         DoWithEvent InsertEventAfter n ->
             ( insertEventAfter diagram n, Cmd.none )
         DoWithEvent DeleteEvent n ->
             ( deleteEvent diagram n, Cmd.none )
-        DoWithEvent (EditText textData) n ->
+        DoWithEvent (EditEventText textData) n ->
             ( showTextEditor diagram textData (StoreEventText n), Cmd.none )
         UpdateText textAction ->
             ( updateText diagram textAction, Cmd.none )
@@ -961,6 +1009,7 @@ drawPointInteractionUI diagram dimension point =
             , g
                 [ transform ("translate (" ++ fromFloat x ++ " " ++ fromFloat y ++ ") translate (-26 -16) scale (0.03)")
                 , Svg.Attributes.cursor "pointer"
+                , onClick (DoWithPoint EditPointText point) 
                 ]
                 [ rect
                     [ Svg.Attributes.x "0"
@@ -989,6 +1038,7 @@ drawPointInteractionUI diagram dimension point =
                     ] -- trash icon
               else
                 g [] []
+            , drawPoint diagram point
             ]
     )
 
@@ -1138,8 +1188,8 @@ svgView diagram =
     , vertAxis diagram
     , drawEvents diagram
     , drawDimensionsLines diagram
-    , drawInteractable diagram diagram.interactable
     , drawDimensionsPoints diagram
+    , drawInteractable diagram diagram.interactable
     ]
 
 pointWithinRadius : Diagram -> Int -> (Int, Int) -> List Point -> Maybe Point
@@ -1155,31 +1205,42 @@ pointWithinRadius diagram radius (x, y) points =
         )
         points
 
+busyWithTextInteraction : Diagram -> Bool
+busyWithTextInteraction diagram =
+    case diagram.interactable of
+        Just (InteractableText _ _) ->
+            True
+        _ ->
+            False
+
 withinPointRadius : Diagram -> D.Decoder Message
 withinPointRadius diagram =
-    case diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
-        Nothing ->
-            D.fail "No focused dimension"
-        Just dimension ->
-            D.map2 (\x y -> (x, y))
-                (D.field "clientX" D.int)
-                (D.field "clientY" D.int)
-            |> D.andThen
-                (\coords ->
-                    case pointWithinRadius diagram 35 coords dimension.points of
-                        Just point ->
-                            D.succeed (DoWithPoint ShowPointUI point)
-                        Nothing ->
-                            case diagram.interactable of
-                                Just (InteractablePoint _) ->
-                                    -- I am outside the radius.
-                                    -- No matter what the Point interaction is, it dies now.
-                                    D.succeed RemovePointUI
-                                Just (InteractableText _ _) ->
-                                    D.fail "In the middle of a text interaction - ignoring point interactions for now"
-                                Nothing ->
-                                    D.fail "No point within radius"
-                )
+    if busyWithTextInteraction diagram then
+        D.fail "In the middle of a text interaction - ignoring point interactions for now"
+    else
+        case diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
+            Nothing ->
+                D.fail "No focused dimension"
+            Just dimension ->
+                D.map2 (\x y -> (x, y))
+                    (D.field "clientX" D.int)
+                    (D.field "clientY" D.int)
+                |> D.andThen
+                    (\coords ->
+                        case pointWithinRadius diagram 35 coords dimension.points of
+                            Just point ->
+                                D.succeed (DoWithPoint ShowPointUI point)
+                            Nothing ->
+                                case diagram.interactable of
+                                    Just (InteractablePoint _) ->
+                                        -- I am outside the radius.
+                                        -- No matter what the Point interaction is, it dies now.
+                                        D.succeed RemovePointUI
+                                    Just (InteractableText _ _) ->
+                                        D.fail "In the middle of a text interaction - ignoring point interactions for now"
+                                    Nothing ->
+                                        D.fail "No point within radius"
+                    )
 
 keyToTextAction : String -> Maybe TextAction
 keyToTextAction s =
