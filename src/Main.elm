@@ -13,14 +13,17 @@ import FontAwesome.Svg exposing (viewIcon)
 import Svg.Events exposing (onClick)
 import GenericDict as Dict exposing (Dict)
 import Browser.Events
+import Html.Attributes
+import Html.Attributes exposing (contenteditable)
 
 -- TODO: More than one dimension...
 -- TODO: Focus-buttons on SVG itself, no HTML necessary??
--- TODO: Descriptions for nodes
 -- TODO: Better bands, which actually reflect the ranges and meanings of the focused dimension
--- TODO: Better UX for moving a point up and down ... perhaps dragging and/or keypresses?
 -- TODO: Band colours should be reflective of focused dimension.
+-- TODO: Better UX for moving a point up and down ... perhaps dragging and/or keypresses?
+-- TODO: Track compositionevents so that I can put emojis into text!
 -- TODO: (Limited?) Undo?
+-- TODO: Track selection events so that I can copy-paste properly...
 
 iconSize : Float
 iconSize = 512.0
@@ -80,16 +83,32 @@ type Point
     = Value EventLine Float
     | Described EventLine Float String
 
+{- Oversimplified relationships:
+
+🟣 OR: knowledge practices ↔ legitimate objects
+🟣 DR: knowledge practices ↔ everything else
+🟣 IR: knowledge practices ↔ ways of knowing
+🟣 SubR: knowledge practices ↔ legitimate knowers
+🟣 Gazes: knower ↔ knowledge
+🟣 SD: knowledge ↔ knowledge 🚨
+🟣 SG: context ↔ knowledge ✅
+-}
+
 type alias Dimension =
     { texts : List RangeDescription
     , points : List Point
     , plus : String
     , minus : String
+    , color : String
     }
 
 type DimensionName
     = SG
+    | SD
 type alias Band = Int -- which band (0-3) we're drawing
+
+type alias HexColor = String
+
 type alias Configuration =
     { eventSpacing : Int
     }
@@ -171,12 +190,16 @@ dimensionNameToString : DimensionName -> String
 dimensionNameToString dim =
     case dim of
         SG ->
-            "SG"
+            "Semantic gravity"
+        SD ->
+            "Semantic density"
 
 dimensionNameToDimension : Diagram -> DimensionName -> Maybe Dimension
 dimensionNameToDimension diagram dim =
     case dim of
         SG ->
+            dictGet dim diagram.dimensions
+        SD ->
             dictGet dim diagram.dimensions
 
 dictGet : DimensionName -> Dict DimensionName v -> Maybe v
@@ -218,6 +241,18 @@ sgInit =
         --[Value 0 0.0, Value 1 0.5, Value 2 0.9, Described 3 1.0 "I ain't so dense, amirite?  Hat.  Hat.", Value 4 -0.9, Value 5 -1.0]
     , plus = "Increased abstraction and generalization; less embedded in a specific and concrete context"
     , minus = "Increased binding to a particular context or situation; decreased applicability to many different contexts"
+    , color = "#fcab30"
+    }
+
+sdInit : Dimension
+sdInit =
+    { texts =
+        []
+    , points =
+        [ Value 0 0.0 ]
+    , plus = "Understanding requires a larger number of meanings per term; meaning condensed in jargon"
+    , minus = "Understanding possible with fewer meanings per term; meaning expressed in \"ordinary\" terms"
+    , color = "#2cb3fb"
     }
 
 init : Diagram
@@ -237,6 +272,7 @@ init =
     , dimensions =
         Dict.fromList dimensionNameToString
             [ ( SG, sgInit )
+            , ( SD, sdInit )
             ]
     , config = defaultConfig
     , focusedDimension = Nothing
@@ -315,7 +351,7 @@ drawEventText diagram n s =
             ]
         , g
             [ transform ("translate (" ++ fromFloat (eventLineToGraphX diagram n + 50) ++ " " ++ fromFloat (dia_withGraphY diagram identity + 5) ++ ") scale (0.03)")
-            , onClick (DoWithEvent (EditEventText { maxLength = 60, current = s, cursor = End }) n)
+            , onClick (DoWithEvent (EditEventText { maxLength = 80, current = s, cursor = End }) n)
             ]
             [ rect
                     [ Svg.Attributes.x "0"
@@ -729,7 +765,7 @@ editPointText diagram point =
         Just dimensionName ->
             showTextEditor
                 diagram
-                { current = pointToText point, cursor = End, maxLength = 80 }
+                { current = pointToText point, cursor = End, maxLength = 150 }
                 (StorePointText dimensionName point)
         Nothing ->
             diagram
@@ -801,15 +837,16 @@ pointToGraphCoordinates : Diagram -> Point -> ( Float, Float )
 pointToGraphCoordinates diagram point =
     ( eventLineToGraphX diagram (pointToEventLine point), pointToGraphY diagram point )
 
-drawPoint : Diagram -> Point -> Svg a
-drawPoint diagram point =
+drawPoint : Diagram -> HexColor -> Point -> Svg a
+drawPoint diagram color point =
     case point of
         Value n _ ->
             circle
                 [ cx (fromFloat (eventLineToGraphX diagram n))
                 , cy (fromFloat (pointToGraphY diagram point))
                 , r "5"
-                , fill "#fcab30cc"
+                , fillOpacity "0.8"
+                , fill color
                 , stroke "black"
                 ]
                 []
@@ -819,13 +856,14 @@ drawPoint diagram point =
                 , y (fromFloat (pointToGraphY diagram point - 5))
                 , width "10"
                 , height "10"
-                , fill "#fcab30cc"
+                , fillOpacity "0.8"
+                , fill color
                 , stroke "black"
                 ]
                 [ Svg.title [] [ text description ] ]
 
-drawContinuousLine : Diagram -> List ( Float, Float ) -> Svg a
-drawContinuousLine diagram coordinates =
+drawContinuousLine : Diagram -> HexColor -> List ( Float, Float ) -> Svg a
+drawContinuousLine diagram color coordinates =
     case coordinates of
         [] ->
             g [] []
@@ -840,21 +878,21 @@ drawContinuousLine diagram coordinates =
                         ++ fromFloat x ++ " " ++ fromFloat y ++ " "
                     ) ("M " ++ fromFloat ix ++ " " ++ fromFloat iy ++ " S ") coordinates
                     )
-                , stroke "#fcab30"
+                , stroke color
                 , strokeWidth "2"
                 , fill "transparent"
                 ]
                 []
 
-drawLine : Diagram -> List Point -> Svg a
-drawLine diagram =
+drawLine : Diagram -> HexColor -> List Point -> Svg a
+drawLine diagram color =
     List.sortBy ( pointToEventLine )
     >> List.map ( pointToGraphCoordinates diagram )
-    >> ( drawContinuousLine diagram )
+    >> ( drawContinuousLine diagram color )
 
-drawPoints : Diagram -> List Point -> Svg a
-drawPoints diagram points =
-    g [] ( List.map (drawPoint diagram) points )
+drawPoints : Diagram -> HexColor -> List Point -> Svg a
+drawPoints diagram color points =
+    g [] ( List.map (drawPoint diagram color) points )
 
 first : (a -> Bool) -> List a -> Maybe a
 first predicate list =
@@ -1038,98 +1076,70 @@ drawPointInteractionUI diagram dimension point =
                     ] -- trash icon
               else
                 g [] []
-            , drawPoint diagram point
+            , drawPoint diagram dimension.color point
             ]
     )
 
 drawInteractableText : Diagram -> TextData -> Svg Message
 drawInteractableText diagram textData =
-    let
-        avgCharWidth = 8
-    -- assume a length of about ... 4? ... for each character
-    in
-        g
+    g
+        []
+        [ rect
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w / 2 - 160)))
+            , y (fromFloat (dia_withGraphHeight diagram (\h -> h / 2 - 70)))
+            , width (fromFloat 320)
+            , height "140"
+            , rx "4"
+            , fill "#bbba"
+            ]
             []
-            [ rect
-                [ x (fromFloat (dia_withGraphWidth diagram (\w -> w / 2 - avgCharWidth * toFloat textData.maxLength / 2 - 5)))
-                , y (fromFloat (dia_withGraphHeight diagram (\h -> h / 2 - 15)))
-                , width (fromFloat (toFloat textData.maxLength * avgCharWidth + 10))
-                , height "30"
-                , rx "4"
-                , fill "#bbba"
-                ]
-                []
-            , rect
-                [ x (fromFloat (dia_withGraphWidth diagram (\w -> w / 2 - avgCharWidth * toFloat textData.maxLength / 2)))
-                , y (fromFloat (dia_withGraphHeight diagram (\h -> h / 2 - 10)))
-                , width (fromFloat (toFloat textData.maxLength * avgCharWidth))
-                , height "20"
-                , rx "4"
-                , fill "white"
-                ]
-                []
-            , text_
-                [ x (fromFloat (dia_withGraphWidth diagram (\w -> w / 2 - avgCharWidth * toFloat textData.maxLength / 2 + 2)))
-                , y (fromFloat (dia_withGraphHeight diagram (\h -> h / 2 + 8)))
-                , fill "black"
-                , fontFamily "Calibri, sans-serif"
-                , fontSize "14pt"
+        , rect
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w / 2 - 150)))
+            , y (fromFloat (dia_withGraphHeight diagram (\h -> h / 2 - 60)))
+            , width (fromFloat 300)
+            , height "120"
+            , rx "4"
+            , fill "white"
+            , id "text-input"
+            ]
+            []
+        , foreignObject 
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w / 2 - 148)))
+            , y (fromFloat (dia_withGraphHeight diagram (\h -> h / 2 - 60)))
+            , width "300"
+            , height "100"
+            ]
+            [ Html.div
+                [ Html.Attributes.style "font-family" "Calibri,sans-serif"
+                , Html.Attributes.style "font-size" "12pt"
                 ]
                 (
                     let
-                        cursorAnimation =
-                            animate
-                                [ attributeName "fill"
-                                , values "black;transparent"
-                                , dur "0.8s"
-                                , calcMode "discrete"
-                                , repeatCount "indefinite"
-                                ]
-                                []
                         cursor =
-                            tspan
-                                [ fontSize "18pt"
-                                , dy "2"
-                                , dx "-2"
+                            Html.span
+                                [ Html.Attributes.style "position" "absolute"
+                                , Html.Attributes.style "margin-top" "-2px"
+                                , Html.Attributes.style "margin-left" "-2px"
                                 ]
-                                [ text "I"
-                                , cursorAnimation
-                                ]
-                        cursorAtStart =
-                            tspan
-                                [ fontSize "18pt"
-                                , dx "-2"
-                                ]
-                                [ text "I"
-                                , cursorAnimation
-                                ]
-                        textyPre s =
-                            tspan
-                                [ dy "-2" ]
-                                [ text s ]
-                        textyPost s =
-                            tspan
-                                [ dy "-2"
-                                , dx "-4"
-                                ]
-                                [ text s ]
+                                [ text "|" ]
                     in
-                        case textData.cursor of
-                            Start ->
-                                [ cursorAtStart
-                                , textyPost textData.current
-                                ]
-                            End ->
-                                [ textyPre textData.current
-                                , cursor
-                                ]
-                            AfterIndex n ->
-                                [ textyPre (String.left (n + 1) textData.current)
-                                , cursor
-                                , textyPost (String.dropLeft (n + 1) textData.current)
-                                ]
+                    case textData.cursor of
+                        Start ->
+                            [ cursor
+                            , Html.span [] [ text textData.current ]
+                            ]
+                        End ->
+                            [ Html.span [] [ text textData.current ]
+                            , cursor
+                            ]
+                        AfterIndex n ->
+                            [ Html.span [] [ text (String.left (n + 1) textData.current) ]
+                            , cursor
+                            , Html.span [] [ text (String.dropLeft (n + 1) textData.current) ]
+                            ]
                 )
             ]
+        ]
 
 drawInteractable : Diagram -> Maybe Interactable -> Svg Message
 drawInteractable diagram interactable =
@@ -1159,8 +1169,7 @@ drawDimensionsLines diagram =
         []
         ( Dict.values diagram.dimensions
           |> sortByFocused diagram
-          |> List.map (\dimension -> dimension.points)
-          |> List.map (drawLine diagram)
+          |> List.map (\dimension -> drawLine diagram dimension.color dimension.points)
         )
 
 drawDimensionsPoints : Diagram -> Svg a
@@ -1169,10 +1178,54 @@ drawDimensionsPoints diagram =
         []
         ( Dict.values diagram.dimensions
           |> sortByFocused diagram
-          |> List.map (\dimension -> dimension.points)
-          |> List.map (drawPoints diagram)
+          |> List.map (\dimension -> drawPoints diagram dimension.color dimension.points)
         )
 
+drawFocusButton : Diagram -> Int -> HexColor -> DimensionName -> Svg Message
+drawFocusButton diagram index color dimensionName =
+    g
+        [ onClick (FocusOn dimensionName)
+        , Svg.Attributes.cursor "pointer"
+        ]
+        [ rect
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 140)))
+            , y (fromFloat (dia_withGraphY diagram (\y -> y + (30 * toFloat index) + 10)))
+            , width "130"
+            , height "24"
+            , rx "4"
+            , fillOpacity "0.8"
+            , fill color
+            , stroke "black"
+            , strokeDasharray
+                ( if diagram.focusedDimension == Just dimensionName then
+                    ""
+                  else
+                    "4"
+                )
+            ]
+            []
+        , text_
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 140) + 5))
+            , y (fromFloat (dia_withGraphY diagram (\y -> y + (30 * toFloat index) + 26)))
+            , fill "black"
+            , fontFamily "Calibri, sans-serif"
+            ]
+            [ text (dimensionNameToString dimensionName) ]
+        ]
+
+drawFocusButtons : Diagram -> Svg Message
+drawFocusButtons diagram =
+    g
+        []
+        ( List.indexedMap
+            (\i dimensionName ->
+                case dimensionNameToDimension diagram dimensionName of
+                    Just dim ->
+                        drawFocusButton diagram i dim.color dimensionName
+                    Nothing ->
+                        g [] []
+            ) (Dict.keys diagram.dimensions)
+        )
 svgView : Diagram -> Svg Message
 svgView diagram =
   svg
@@ -1186,6 +1239,7 @@ svgView diagram =
     , band diagram 3
     , horizAxis diagram
     , vertAxis diagram
+    , drawFocusButtons diagram
     , drawEvents diagram
     , drawDimensionsLines diagram
     , drawDimensionsPoints diagram
@@ -1305,19 +1359,15 @@ view diagram =
             [ Svg.Events.on "mousemove" (withinPointRadius diagram)            
             ]
             [ svgView diagram ]
-        , div
-            []
-            [ button
-                [ onClick (FocusOn SG) ]
-                [ text "Focus on SG" ]
-            ]
         ]
 
 subscriptions : Diagram -> Sub Message
 subscriptions diagram =
     case diagram.interactable of
         Just ( InteractableText _ _ ) ->
-            Browser.Events.onKeyDown (interpretKeypress diagram)
+            Sub.batch
+                [ Browser.Events.onKeyDown (interpretKeypress diagram)
+                ]
         _ ->
             Sub.none
 
