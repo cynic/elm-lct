@@ -1227,9 +1227,9 @@ drawFocusButton diagram index color dimensionName =
         , Svg.Attributes.cursor "pointer"
         ]
         [ rect
-            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 140)))
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 160)))
             , y (fromFloat (dia_withGraphY diagram (\y -> y + (30 * toFloat index) + 10)))
-            , width "130"
+            , width "150"
             , height "24"
             , rx "4"
             , fillOpacity "0.8"
@@ -1241,13 +1241,30 @@ drawFocusButton diagram index color dimensionName =
                   else
                     "4"
                 )
+            , strokeWidth
+                ( if diagram.focusedDimension == Just dimensionName then
+                    "2"
+                  else
+                    "1"
+                )
             ]
             []
         , text_
-            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 140) + 5))
-            , y (fromFloat (dia_withGraphY diagram (\y -> y + (30 * toFloat index) + 26)))
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 160) + 5))
+            , y (fromFloat (dia_withGraphY diagram (\y -> y + (30 * toFloat index) + 27)))
+            , stroke "white"
+            , strokeWidth "4"
+            , strokeOpacity "0.4"
+            , fontFamily "Calibri, sans-serif"
+            , fontSize "14pt"
+            ]
+            [ text (dimensionNameToString dimensionName) ]
+        , text_
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 160) + 5))
+            , y (fromFloat (dia_withGraphY diagram (\y -> y + (30 * toFloat index) + 27)))
             , fill "black"
             , fontFamily "Calibri, sans-serif"
+            , fontSize "14pt"
             ]
             [ text (dimensionNameToString dimensionName) ]
         ]
