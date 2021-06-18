@@ -835,7 +835,7 @@ update message diagram =
         DoWithPoint ExtendPointDown p ->
             ( interactivelyChangeDimensionOnDiagram diagram (extendPointDown p), Cmd.none )
         DoWithPoint DeletePoint p ->
-            ( interactivelyChangeDimensionOnDiagram diagram (deletePoint p), Cmd.none )
+            ( interactivelyChangeDimensionOnDiagram diagram (deletePoint p) |> removeInteractableUI, Cmd.none )
         DoWithPoint EditPointText p ->
             ( editPointText diagram p, Cmd.none )
         RemovePointUI ->
