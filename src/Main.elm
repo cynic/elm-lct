@@ -516,6 +516,14 @@ pointWithEventLine f point =
         Described n v s ->
             Described (f n) v s
 
+newPointAfter : Point -> Point
+newPointAfter point =
+    case point of
+        Value n v ->
+            Value (n + 1) v
+        Described n v _ ->
+            Value (n + 1) v
+
 addPointToDimension : Dimension -> Point -> Dimension
 addPointToDimension dimension point =
     { dimension | points = point :: dimension.points }
@@ -538,7 +546,7 @@ movePoint change point =
 
 addExtendedPoint : Point -> Dimension -> Dimension
 addExtendedPoint point dimension =
-    pointWithEventLine (\eventLine -> eventLine + 1) point
+    newPointAfter point
     |> addPointToDimension dimension
 
 movePointUp : Float -> Point -> Point
