@@ -1,5 +1,5 @@
 module Main exposing (..)
-import Html exposing (div, Html, button)
+import Html exposing (Html)
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
 import String exposing (fromInt, fromFloat)
@@ -14,10 +14,7 @@ import Svg.Events exposing (onClick)
 import GenericDict as Dict exposing (Dict)
 import Browser.Events
 import Html.Attributes
-import Html.Attributes exposing (contenteditable)
 
--- TODO: More than one dimension...
--- TODO: Focus-buttons on SVG itself, no HTML necessary??
 -- TODO: Better bands, which actually reflect the ranges and meanings of the focused dimension
 -- TODO: Band colours should be reflective of focused dimension.
 -- TODO: Better UX for moving a point up and down ... perhaps dragging and/or keypresses?
@@ -89,8 +86,8 @@ type Point
 🟣 DR: knowledge practices ↔ everything else
 🟣 IR: knowledge practices ↔ ways of knowing
 🟣 SubR: knowledge practices ↔ legitimate knowers
-🟣 Gazes: knower ↔ knowledge
-🟣 SD: knowledge ↔ knowledge 🚨
+🟣 Gazes: knower ↔ knowledge ✅
+🟣 SD: knowledge ↔ knowledge ✅
 🟣 SG: context ↔ knowledge ✅
 -}
 
@@ -105,6 +102,8 @@ type alias Dimension =
 type DimensionName
     = SG
     | SD
+    | Gaze
+
 type alias Band = Int -- which band (0-3) we're drawing
 
 type alias HexColor = String
@@ -193,14 +192,12 @@ dimensionNameToString dim =
             "Semantic gravity"
         SD ->
             "Semantic density"
+        Gaze ->
+            "Gaze"
 
 dimensionNameToDimension : Diagram -> DimensionName -> Maybe Dimension
 dimensionNameToDimension diagram dim =
-    case dim of
-        SG ->
-            dictGet dim diagram.dimensions
-        SD ->
-            dictGet dim diagram.dimensions
+    dictGet dim diagram.dimensions            
 
 dictGet : DimensionName -> Dict DimensionName v -> Maybe v
 dictGet =
@@ -255,6 +252,17 @@ sdInit =
     , color = "#2cb3fb"
     }
 
+gazeInit : Dimension
+gazeInit =
+    { texts =
+        []
+    , points =
+        [ Value 0 0.0 ]
+    , plus = "Requires some inner or inborn skill or knowledge for true understanding"
+    , minus = "Can be taught/learned by anyone"
+    , color = "#edfb2c"
+    }
+
 init : Diagram
 init =
     { textHeight = 320
@@ -273,6 +281,7 @@ init =
         Dict.fromList dimensionNameToString
             [ ( SG, sgInit )
             , ( SD, sdInit )
+            , ( Gaze, gazeInit )
             ]
     , config = defaultConfig
     , focusedDimension = Nothing
@@ -960,7 +969,7 @@ drawPointInteractionUI diagram dimension point =
                     , viewIcon FontAwesome.Solid.arrowCircleRight
                     , Svg.title
                         []
-                        [ text "Extend to next event, at the same level" ]
+                        [ text "Continue with same strength" ]
                     ] -- right-arrow
               else
                 g [] []
@@ -980,7 +989,7 @@ drawPointInteractionUI diagram dimension point =
                     , viewIcon FontAwesome.Solid.arrowCircleRight
                     , Svg.title
                         []
-                        [ text ("Extend with: " ++ dimension.plus) ]
+                        [ text ("Stronger: " ++ dimension.plus) ]
                     ] -- top-right
               else
                 g [] []
@@ -1000,7 +1009,7 @@ drawPointInteractionUI diagram dimension point =
                     , viewIcon FontAwesome.Solid.arrowCircleRight
                     , Svg.title
                         []
-                        [ text ("Extend with: " ++ dimension.minus) ]
+                        [ text ("Weaker: " ++ dimension.minus) ]
                     ] -- bottom-right
               else
                 g [] []
@@ -1352,14 +1361,10 @@ interpretKeypress diagram =
 
 view : Diagram -> Html Message
 view diagram =
-    div
-        [ --Svg.Events.on "keydown" (interpretKeypress diagram)
+    Html.div
+        [ Svg.Events.on "mousemove" (withinPointRadius diagram)            
         ]
-        [ div
-            [ Svg.Events.on "mousemove" (withinPointRadius diagram)            
-            ]
-            [ svgView diagram ]
-        ]
+        [ svgView diagram ]
 
 subscriptions : Diagram -> Sub Message
 subscriptions diagram =
