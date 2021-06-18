@@ -1127,6 +1127,14 @@ drawPointInteractionUI diagram dimension point =
             ]
     )
 
+countSpacesOnRight : String -> Int
+countSpacesOnRight s =
+    case String.right 1 s of
+        " " ->
+            1 + countSpacesOnRight (String.left (String.length s - 1) s)
+        _ ->
+            0
+
 drawInteractableText : Diagram -> TextData -> Svg Message
 drawInteractableText diagram textData =
     g
@@ -1177,6 +1185,9 @@ drawInteractableText diagram textData =
                             ]
                         End ->
                             [ Html.span [] [ text textData.current ]
+                            , Html.span
+                                []
+                                [ text <| String.repeat (countSpacesOnRight textData.current) "\u{00A0}" ] -- non-breaking space
                             , cursor
                             ]
                         AfterIndex n ->
