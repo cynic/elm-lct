@@ -103,6 +103,8 @@ type DimensionName
     = SG
     | SD
     | Gaze
+    | OR
+    | DR
 
 type alias Band = Int -- which band (0-3) we're drawing
 
@@ -194,6 +196,10 @@ dimensionNameToString dim =
             "Semantic density"
         Gaze ->
             "Gaze"
+        OR ->
+            "Ontic relation"
+        DR ->
+            "Discursive relation"
 
 dimensionNameToDimension : Diagram -> DimensionName -> Maybe Dimension
 dimensionNameToDimension diagram dim =
@@ -263,6 +269,28 @@ gazeInit =
     , color = "#edfb2c"
     }
 
+orInit : Dimension
+orInit =
+    { texts =
+        []
+    , points =
+        [ Value 0 0.0 ]
+    , plus = "Applicable problem-situations or objects-of-study are strongly delineated"
+    , minus = "Applicable to any problem-situations or objects-of-study" 
+    , color = "#ac2cfb"
+    }
+
+drInit : Dimension
+drInit =
+    { texts =
+        []
+    , points =
+        [ Value 0 0.0 ]
+    , plus = "Legitimate approach to problem is strongly delineated"
+    , minus = "Any approach to the problem is welcome"
+    , color = "#fb2c2c"
+    }
+
 init : Diagram
 init =
     { textHeight = 320
@@ -282,6 +310,8 @@ init =
             [ ( SG, sgInit )
             , ( SD, sdInit )
             , ( Gaze, gazeInit )
+            , ( OR, orInit )
+            , ( DR, drInit )
             ]
     , config = defaultConfig
     , focusedDimension = Nothing
