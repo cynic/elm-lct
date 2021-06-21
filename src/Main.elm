@@ -14,7 +14,15 @@ import Svg.Events exposing (onClick)
 import GenericDict as Dict exposing (Dict)
 import Browser.Events
 import Html.Attributes
+import SerializableData exposing (..)
+import Dimensions
 
+-- TODO: Save/retrieve diagrams
+-- TODO: SubR / IR instead of Gazes
+-- TODO: Interpolated lines for "gaze" = SubR/IR and ER = OR/DR
+-- TODO: De-emphasize lines you don't really care about
+-- TODO: PA / RA dimension
+-- TODO: "Plug a translation device in"???
 -- TODO: Better bands, which actually reflect the ranges and meanings of the focused dimension
 -- TODO: Band colours should be reflective of focused dimension.
 -- TODO: Better UX for moving a point up and down ... perhaps dragging and/or keypresses?
@@ -30,130 +38,6 @@ iconSize = 512.0
 valueChange : Float -- how much a position can change by, normally
 valueChange =
     0.1
-
-type alias EventLine =
-    Int
-
-type alias Event =
-    String
-
-type alias MaxLength =
-    Int
-
-type CursorPosition
-    = Start
-    | End
-    | AfterIndex Int
-
-type alias TextData =
-    { maxLength : MaxLength
-    , current : String
-    , cursor : CursorPosition
-    }
-
-type TextCursorChange
-    = CursorToStart
-    | CursorToEnd
-    | CursorRight
-    | CursorLeft
-
-type TextRemoval
-    = DeleteLeft
-    | DeleteRight
-
-type TextDecision
-    = Accept
-    | Cancel
-
-type TextAction
-    = CursorChange TextCursorChange
-    | Removal TextRemoval
-    | Decision TextDecision
-    | Key String
-
-type alias RangeDescription =
-    { description : String
-    , range : ( Float, Float )
-    }
-
-type Point
-    = Value EventLine Float
-    | Described EventLine Float String
-
-{- Oversimplified relationships:
-
-🟣 OR: knowledge practices ↔ legitimate objects
-🟣 DR: knowledge practices ↔ everything else
-🟣 IR: knowledge practices ↔ ways of knowing
-🟣 SubR: knowledge practices ↔ legitimate knowers
-🟣 Gazes: knower ↔ knowledge ✅
-🟣 SD: knowledge ↔ knowledge ✅
-🟣 SG: context ↔ knowledge ✅
--}
-
-type alias Dimension =
-    { texts : List RangeDescription
-    , points : List Point
-    , plus : String
-    , minus : String
-    , color : String
-    }
-
-type DimensionName
-    = SG
-    | SD
-    | Gaze
-    | OR
-    | DR
-
-type alias Band = Int -- which band (0-3) we're drawing
-
-type alias HexColor = String
-
-type alias Configuration =
-    { eventSpacing : Int
-    }
--- What do I want to do with a Point?
--- 1. move it up
--- 2. move it down
--- 3. create a new point with more +
--- 4. create a new point with more -
--- 5. create a new point at the same level
--- 6. trash the point
--- 7. modify/add a description
-type PointInteraction
-    = ShowPointUI
-    | MovePointUp
-    | MovePointDown
-    | ExtendPointUp
-    | ExtendPointDown
-    | ExtendPoint
-    | DeletePoint
-    | EditPointText
-
-type EventInteraction
-    = DeleteEvent
-    | InsertEventAfter
-    | EditEventText TextData
-
-type PostTextEdit
-    = StoreEventText EventLine
-    | StorePointText DimensionName Point
-
-type Interactable
-    = InteractablePoint Point
-    | InteractableText TextData PostTextEdit
-
-type alias Diagram =
-    { textHeight : Int
-    , width : Int
-    , graphHeight : Int
-    , events : List Event
-    , dimensions : Dict DimensionName Dimension
-    , config : Configuration
-    , focusedDimension : Maybe DimensionName
-    , interactable : Maybe Interactable
-    }
 
 -- Message
 type Message
@@ -223,80 +107,14 @@ calculateWidth diagram =
     -- this is a bit of a thumb-suck and simplificaton, but with any luck, it SHOULD work OK.
     { diagram | width = diagram.config.eventSpacing * List.length diagram.events + 260 }
 
-sgInit : Dimension
-sgInit =
-    { texts =
-        [ { description = "Tied to a concrete context or situation, or tied to a set of known contexts or situations"
-          , range = ( -0.5, 0.0 )
-          }
-        , { description = "Strongly tied to specific context(s) or situation(s); requires effort to abstract"
-          , range = ( -1.0, -0.5 )
-          }
-        , { description = "Abstracted and generalized, with application still visible"
-          , range = ( 0.0, 0.5 )
-          }
-        , { description = "Theoretical, generalized, and abstracted; requires effort to tie to a context"
-          , range = ( 0.5, 1.0 )
-          }
-        ]
-    , points =
-        [ Value 0 0.0 ]
-        --[Value 0 0.0, Value 1 0.5, Value 2 0.9, Described 3 1.0 "I ain't so dense, amirite?  Hat.  Hat.", Value 4 -0.9, Value 5 -1.0]
-    , plus = "Increased abstraction and generalization; less embedded in a specific and concrete context"
-    , minus = "Increased binding to a particular context or situation; decreased applicability to many different contexts"
-    , color = "#fcab30"
-    }
-
-sdInit : Dimension
-sdInit =
-    { texts =
-        []
-    , points =
-        [ Value 0 0.0 ]
-    , plus = "Understanding requires a larger number of meanings per term; meaning condensed in jargon"
-    , minus = "Understanding possible with fewer meanings per term; meaning expressed in \"ordinary\" terms"
-    , color = "#2cb3fb"
-    }
-
-gazeInit : Dimension
-gazeInit =
-    { texts =
-        []
-    , points =
-        [ Value 0 0.0 ]
-    , plus = "Requires some inner or inborn skill or knowledge for true understanding"
-    , minus = "Can be taught/learned by anyone"
-    , color = "#edfb2c"
-    }
-
-orInit : Dimension
-orInit =
-    { texts =
-        []
-    , points =
-        [ Value 0 0.0 ]
-    , plus = "Applicable problem-situations or objects-of-study are strongly delineated"
-    , minus = "Applicable to any problem-situations or objects-of-study" 
-    , color = "#ac2cfb"
-    }
-
-drInit : Dimension
-drInit =
-    { texts =
-        []
-    , points =
-        [ Value 0 0.0 ]
-    , plus = "Legitimate approach to problem is strongly delineated"
-    , minus = "Any approach to the problem is welcome"
-    , color = "#fb2c2c"
-    }
-
 init : Diagram
 init =
     { textHeight = 320
     , width = 0 -- will be calculated
     , graphHeight = 320
     , events =
+        ["New event"]
+{-
         [ "What problem(s) does version control address?"
         , "Older (centralized) version control"
         , "Lock-modify-unlock paradigm"
@@ -305,13 +123,14 @@ init =
         , "Alternative: copy-modify-merge"
         , "Sequence diagram for copy-modify-merge"
         ]
+-}
     , dimensions =
         Dict.fromList dimensionNameToString
-            [ ( SG, sgInit )
-            , ( SD, sdInit )
-            , ( Gaze, gazeInit )
-            , ( OR, orInit )
-            , ( DR, drInit )
+            [ ( SG, Dimensions.sgInit )
+            , ( SD, Dimensions.sdInit )
+            , ( Gaze, Dimensions.gazeInit )
+            , ( OR, Dimensions.orInit )
+            , ( DR, Dimensions.drInit )
             ]
     , config = defaultConfig
     , focusedDimension = Nothing
