@@ -1,5 +1,6 @@
 module Main exposing (..)
 import Html exposing (Html)
+import ListExtensions exposing (..)
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
 import String exposing (fromInt, fromFloat)
@@ -759,17 +760,6 @@ drawLine diagram color =
 drawPoints : Diagram -> HexColor -> List Point -> Svg a
 drawPoints diagram color points =
     g [] ( List.map (drawPoint diagram color) points )
-
-first : (a -> Bool) -> List a -> Maybe a
-first predicate list =
-    case list of
-        [] ->
-            Nothing
-        h::rest ->
-            if predicate h then
-                Just h
-            else
-                first predicate rest
 
 -- is this a point that can be extended to the next event line?
 --   - In other words: is there already a point n+1 ??
