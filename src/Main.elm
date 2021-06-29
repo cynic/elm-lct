@@ -134,8 +134,10 @@ init =
             , ( DR, Dimensions.drInit )
             ]
     , config = defaultConfig
-    , focusedDimension = Nothing
-    , interactable = Nothing
+    , ux =
+        { focusedDimension = Nothing
+        , interactable = Nothing
+        }
     }
     |> calculateWidth
 
@@ -291,17 +293,33 @@ band diagram n =
             ]
             []
 
+modifyUX : Diagram -> (UX -> UX) -> Diagram
+modifyUX diagram f =
+    { diagram | ux = f diagram.ux }
+
 focusOn : DimensionName -> Diagram -> Diagram
 focusOn dim diagram =
-    { diagram | focusedDimension = Just dim }
+    modifyUX diagram (\ux ->
+        { ux | focusedDimension = Just dim }
+    )
+
+showTextUI : Diagram -> TextData -> PostTextEdit -> Diagram
+showTextUI diagram textData postTextEdit =
+    modifyUX diagram (\ux ->
+        { ux | interactable = Just (InteractableText textData postTextEdit) }
+    )
 
 showPointUI : Point -> Diagram -> Diagram
 showPointUI point diagram =
-    { diagram | interactable = Just (InteractablePoint point) }
+    modifyUX diagram (\ux ->
+        { ux | interactable = Just (InteractablePoint point) }
+    )
 
 removeInteractableUI : Diagram -> Diagram
 removeInteractableUI diagram =
-    { diagram | interactable = Nothing }
+    modifyUX diagram (\ux ->
+        { ux | interactable = Nothing }
+    )
 
 changeDimension : DimensionName -> Diagram -> (Dimension -> Dimension) -> Diagram
 changeDimension dimensionName diagram f =
@@ -314,7 +332,7 @@ changeDimension dimensionName diagram f =
 changeFocusedDimension : Diagram -> (Dimension -> Dimension) -> Diagram
 
 changeFocusedDimension diagram f =
-    case diagram.focusedDimension of
+    case diagram.ux.focusedDimension of
         Just dim ->
             changeDimension dim diagram f
         Nothing ->
@@ -454,7 +472,8 @@ deleteEvent diagram n =
     in
         -- out of an abundance of caution (and laziness!), set the interactable as Nothing too.
         -- Perhaps it was displaying a Point that is now gone.
-        { diagram | events = newEvents, dimensions = newDimensions, interactable = Nothing }
+        { diagram | events = newEvents, dimensions = newDimensions }
+        |> removeInteractableUI
         |> calculateWidth
 
 pointWithText : String -> Point -> Point
@@ -594,29 +613,19 @@ handleTextAction diagram textAction postAction textData =
         Decision decision ->
             handleTextDecision diagram decision postAction textData
         Removal removal ->
-            { diagram | interactable =
-                Just ( InteractableText (handleTextRemoval removal textData) postAction )
-            }
+            showTextUI diagram (handleTextRemoval removal textData) postAction
         CursorChange cursorChange ->
-            { diagram | interactable =
-                Just ( InteractableText (handleTextCursor cursorChange textData) postAction )
-            }
+            showTextUI diagram (handleTextCursor cursorChange textData) postAction
         Key key ->
-            { diagram | interactable =
-                Just ( InteractableText (handleTextInput key textData) postAction )
-            }
+            showTextUI diagram (handleTextInput key textData) postAction
 
 updateText : Diagram -> TextAction -> Diagram
 updateText diagram textAction =
-    case diagram.interactable of
+    case diagram.ux.interactable of
         Just ( InteractableText textData postAction ) ->
             handleTextAction diagram textAction postAction textData
         _ ->
             diagram
-
-showTextEditor : Diagram -> TextData -> PostTextEdit -> Diagram
-showTextEditor diagram textData postAction =
-    { diagram | interactable = Just ( InteractableText textData postAction ) }
 
 pointToText : Point -> String
 pointToText point =
@@ -628,9 +637,9 @@ pointToText point =
 
 editPointText : Diagram -> Point -> Diagram
 editPointText diagram point =
-    case diagram.focusedDimension of
+    case diagram.ux.focusedDimension of
         Just dimensionName ->
-            showTextEditor
+            showTextUI
                 diagram
                 { current = pointToText point, cursor = End, maxLength = 150 }
                 (StorePointText dimensionName point)
@@ -665,7 +674,7 @@ update message diagram =
         DoWithEvent DeleteEvent n ->
             ( deleteEvent diagram n, Cmd.none )
         DoWithEvent (EditEventText textData) n ->
-            ( showTextEditor diagram textData (StoreEventText n), Cmd.none )
+            ( showTextUI diagram textData (StoreEventText n), Cmd.none )
         UpdateText textAction ->
             ( updateText diagram textAction, Cmd.none )
 
@@ -1014,7 +1023,7 @@ drawInteractable diagram interactable =
         Nothing ->
             g [] []
         Just (InteractablePoint point) ->
-            case diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
+            case diagram.ux.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
                 Just dimension ->
                     drawPointInteractionUI diagram dimension point
                 Nothing ->
@@ -1024,7 +1033,7 @@ drawInteractable diagram interactable =
 
 sortByFocused : Diagram -> List Dimension -> List Dimension
 sortByFocused diagram dimensions =
-    case diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
+    case diagram.ux.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
         Nothing ->
             dimensions
         Just focused ->
@@ -1064,13 +1073,13 @@ drawFocusButton diagram index color dimensionName =
             , fill color
             , stroke "black"
             , strokeDasharray
-                ( if diagram.focusedDimension == Just dimensionName then
+                ( if diagram.ux.focusedDimension == Just dimensionName then
                     ""
                   else
                     "4"
                 )
             , strokeWidth
-                ( if diagram.focusedDimension == Just dimensionName then
+                ( if diagram.ux.focusedDimension == Just dimensionName then
                     "2"
                   else
                     "1"
@@ -1127,7 +1136,7 @@ svgView diagram =
     , drawEvents diagram
     , drawDimensionsLines diagram
     , drawDimensionsPoints diagram
-    , drawInteractable diagram diagram.interactable
+    , drawInteractable diagram diagram.ux.interactable
     ]
 
 pointWithinRadius : Diagram -> Int -> (Int, Int) -> List Point -> Maybe Point
@@ -1145,7 +1154,7 @@ pointWithinRadius diagram radius (x, y) points =
 
 busyWithTextInteraction : Diagram -> Bool
 busyWithTextInteraction diagram =
-    case diagram.interactable of
+    case diagram.ux.interactable of
         Just (InteractableText _ _) ->
             True
         _ ->
@@ -1156,7 +1165,7 @@ withinPointRadius diagram =
     if busyWithTextInteraction diagram then
         D.fail "In the middle of a text interaction - ignoring point interactions for now"
     else
-        case diagram.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
+        case diagram.ux.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
             Nothing ->
                 D.fail "No focused dimension"
             Just dimension ->
@@ -1169,7 +1178,7 @@ withinPointRadius diagram =
                             Just point ->
                                 D.succeed (DoWithPoint ShowPointUI point)
                             Nothing ->
-                                case diagram.interactable of
+                                case diagram.ux.interactable of
                                     Just (InteractablePoint _) ->
                                         -- I am outside the radius.
                                         -- No matter what the Point interaction is, it dies now.
@@ -1211,7 +1220,7 @@ keyToTextAction s =
 
 interpretKeypress : Diagram -> D.Decoder Message
 interpretKeypress diagram =
-    case diagram.interactable of
+    case diagram.ux.interactable of
         Just (InteractableText _ _) ->
             D.map4 (\ctrl alt composing meta -> ctrl || alt || composing || meta)
                 (D.field "altKey" D.bool)
@@ -1243,7 +1252,7 @@ view diagram =
 
 subscriptions : Diagram -> Sub Message
 subscriptions diagram =
-    case diagram.interactable of
+    case diagram.ux.interactable of
         Just ( InteractableText _ _ ) ->
             Sub.batch
                 [ Browser.Events.onKeyDown (interpretKeypress diagram)
