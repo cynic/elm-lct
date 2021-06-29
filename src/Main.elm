@@ -21,6 +21,10 @@ import Serialize.Decode
 import Serialize.Encode
 import Json.Encode
 import File.Download as Download
+import File.Select as Select
+import File exposing (File)
+import Json.Decode
+import Task
 
 
 -- TODO: Save/retrieve diagrams
@@ -45,6 +49,11 @@ valueChange : Float -- how much a position can change by, normally
 valueChange =
     0.1
 
+type FileLoadProcess
+    = RequestLoad
+    | Select File
+    | Loaded String -- file content
+
 -- Message
 type Message
     = FocusOn DimensionName
@@ -53,6 +62,7 @@ type Message
     | DoWithEvent EventInteraction EventLine
     | UpdateText TextAction
     | Save Diagram
+    | Load FileLoadProcess
 
 dia_withGraphWidth : Diagram -> (Float -> Float) -> Float
 dia_withGraphWidth diagram f =
@@ -652,6 +662,22 @@ saveDiagramFile diagram =
     encodeDiagramFile diagram
     |> saveFile
 
+selectJsonFile : Cmd Message
+selectJsonFile =
+    Select.file ["application/json"] (\file -> Load (Select file))
+
+getFileContent : File -> Cmd Message
+getFileContent file =
+    Task.perform (\content -> Load (Loaded content)) (File.toString file)
+
+loadDiagram : String -> Diagram -> Diagram
+loadDiagram content diagram =
+    case Json.Decode.decodeString Serialize.Decode.diagram content of
+        Err _ ->
+            diagram
+        Ok decoded ->
+            decoded
+
 update : Message -> Diagram -> (Diagram, Cmd Message)
 update message diagram =
     case message of
@@ -685,6 +711,13 @@ update message diagram =
             ( updateText diagram textAction, Cmd.none )
         Save diagramToSave ->
             ( diagram, saveDiagramFile diagramToSave )
+        Load RequestLoad ->
+            ( diagram, selectJsonFile )
+        Load (Select file) ->
+            ( diagram, getFileContent file )
+        Load ( Loaded content) ->
+            ( loadDiagram content diagram, Cmd.none )
+        
 
 pointToQuantitativeValue : Point -> Float
 pointToQuantitativeValue point =
@@ -1131,22 +1164,43 @@ drawFocusButtons diagram =
 drawLoadSave : Diagram -> Svg Message
 drawLoadSave diagram =
     g
-        [ onClick (Save diagram)
-        , Svg.Attributes.cursor "pointer"
-        ]
-        [ rect
-            [ x "5"
-            , y "5"
-            , width "32"
-            , height "25"
-            , fill "white"
-            , rx "2"
+        []
+        [ g -- group for save-button
+            [ onClick (Save diagram)
+            , Svg.Attributes.cursor "pointer"
             ]
-            []
-        , g
-            [ transform ("translate (5 5) scale (0.05)")
+            [ rect
+                [ x "5"
+                , y "5"
+                , width "32"
+                , height "25"
+                , fill "white"
+                , rx "2"
+                ]
+                []
+            , g
+                [ transform ("translate (5 5) scale (0.05)")
+                ]
+                [ viewIcon FontAwesome.Solid.cloudDownloadAlt ]
             ]
-            [ viewIcon FontAwesome.Solid.cloudDownloadAlt ]
+        , g -- group for load-button
+            [ onClick (Load RequestLoad)
+            , Svg.Attributes.cursor "pointer"
+            ]
+            [ rect
+                [ x "40" 
+                , y "5" 
+                , width "32"
+                , height "25"
+                , fill "white"
+                , rx "2"
+                ]
+                []
+            , g
+                [ transform ("translate (40 5) scale (0.05)")
+                ]
+                [ viewIcon FontAwesome.Solid.upload ]
+            ]
         ]
 
 svgView : Diagram -> Svg Message
