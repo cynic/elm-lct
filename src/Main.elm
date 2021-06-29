@@ -19,6 +19,9 @@ import SerializableData exposing (..)
 import Dimensions
 import Serialize.Decode
 import Serialize.Encode
+import Json.Encode
+import File.Download as Download
+
 
 -- TODO: Save/retrieve diagrams
 -- TODO: SubR / IR instead of Gazes
@@ -49,6 +52,7 @@ type Message
     | RemovePointUI
     | DoWithEvent EventInteraction EventLine
     | UpdateText TextAction
+    | Save Diagram
 
 dia_withGraphWidth : Diagram -> (Float -> Float) -> Float
 dia_withGraphWidth diagram f =
@@ -634,6 +638,20 @@ editPointText diagram point =
         Nothing ->
             diagram
 
+encodeDiagramFile : Diagram -> Json.Encode.Value
+encodeDiagramFile diagram =
+    Serialize.Encode.encodeDiagram diagram
+
+saveFile : Json.Encode.Value -> Cmd a
+saveFile value =
+    Json.Encode.encode 0 value
+    |> Download.string "lct-diagram.json" "application/json"
+
+saveDiagramFile : Diagram -> Cmd a
+saveDiagramFile diagram =
+    encodeDiagramFile diagram
+    |> saveFile
+
 update : Message -> Diagram -> (Diagram, Cmd Message)
 update message diagram =
     case message of
@@ -665,6 +683,8 @@ update message diagram =
             ( showTextUI diagram textData (StoreEventText n), Cmd.none )
         UpdateText textAction ->
             ( updateText diagram textAction, Cmd.none )
+        Save diagramToSave ->
+            ( diagram, saveDiagramFile diagramToSave )
 
 pointToQuantitativeValue : Point -> Float
 pointToQuantitativeValue point =
@@ -1107,6 +1127,28 @@ drawFocusButtons diagram =
                         g [] []
             ) (Dict.keys diagram.dimensions)
         )
+
+drawLoadSave : Diagram -> Svg Message
+drawLoadSave diagram =
+    g
+        [ onClick (Save diagram)
+        , Svg.Attributes.cursor "pointer"
+        ]
+        [ rect
+            [ x "5"
+            , y "5"
+            , width "32"
+            , height "25"
+            , fill "white"
+            , rx "2"
+            ]
+            []
+        , g
+            [ transform ("translate (5 5) scale (0.05)")
+            ]
+            [ viewIcon FontAwesome.Solid.cloudDownloadAlt ]
+        ]
+
 svgView : Diagram -> Svg Message
 svgView diagram =
   svg
@@ -1124,6 +1166,7 @@ svgView diagram =
     , drawEvents diagram
     , drawDimensionsLines diagram
     , drawDimensionsPoints diagram
+    , drawLoadSave diagram
     , drawInteractable diagram diagram.ux.interactable
     ]
 
