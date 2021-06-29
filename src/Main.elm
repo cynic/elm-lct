@@ -22,9 +22,9 @@ import Serialize.Encode
 
 -- TODO: Save/retrieve diagrams
 -- TODO: SubR / IR instead of Gazes
--- TODO: Interpolated lines for "gaze" = SubR/IR and ER = OR/DR
--- TODO: De-emphasize lines you don't really care about
 -- TODO: PA / RA dimension
+-- TODO: De-emphasize lines you don't really care about
+-- TODO: Interpolated lines for "gaze" = SubR/IR and ER = OR/DR
 -- TODO: "Plug a translation device in"???
 -- TODO: Better bands, which actually reflect the ranges and meanings of the focused dimension
 -- TODO: Band colours should be reflective of focused dimension.
