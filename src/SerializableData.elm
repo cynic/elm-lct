@@ -153,34 +153,19 @@ dimensionNameToString dim =
         DR ->
             "Discursive relation"
 
+-- we have a test for this, to make sure that we can round-trip.
 stringToDimensionName : String -> Maybe DimensionName
 stringToDimensionName s =
-    -- to make the compiler remind us that we need to have ALL cases here,
-    -- we use this trick: https://stackoverflow.com/a/42742928 .
-    let
-        whatever blah =
-            case blah of
-                SG ->
-                    ()
-                SD ->
-                    ()
-                Gaze ->
-                    ()
-                OR ->
-                    ()
-                DR ->
-                    ()
-    in
-        case s of
-            "Semantic gravity" ->
-                Just SG
-            "Semantic density" ->
-                Just SD
-            "Gaze" ->
-                Just Gaze
-            "Ontic relation" ->
-                Just OR
-            "Discursive relation" ->
-                Just DR
-            _ ->
-                Nothing
+    case s of
+        "Semantic gravity" ->
+            Just SG
+        "Semantic density" ->
+            Just SD
+        "Gaze" ->
+            Just Gaze
+        "Ontic relation" ->
+            Just OR
+        "Discursive relation" ->
+            Just DR
+        _ ->
+            Nothing
