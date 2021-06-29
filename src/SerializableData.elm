@@ -1,5 +1,6 @@
 module SerializableData exposing (..)
-import GenericDict as Dict exposing (Dict)
+import GenericDict exposing (Dict)
+import ListExtensions exposing (first)
 
 type alias EventLine =
     Int
@@ -114,6 +115,11 @@ type Interactable
     = InteractablePoint Point
     | InteractableText TextData PostTextEdit
 
+type alias UX =
+    { focusedDimension : Maybe DimensionName
+    , interactable : Maybe Interactable
+    }
+
 type alias Diagram =
     { textHeight : Int
     , width : Int
@@ -121,6 +127,60 @@ type alias Diagram =
     , events : List Event
     , dimensions : Dict DimensionName Dimension
     , config : Configuration
-    , focusedDimension : Maybe DimensionName
-    , interactable : Maybe Interactable
+    , ux : UX
     }
+
+dimensionNameMap : List (DimensionName, String)
+dimensionNameMap =
+    [ ( SG, "Semantic gravity" )
+    , ( SD, "Semantic density" )
+    , ( Gaze, "Gaze" )
+    , ( OR, "Ontic relation" )
+    , ( DR, "Discursive relation" )
+    ]
+
+dimensionNameToString : DimensionName -> String
+dimensionNameToString dim =
+    case dim of
+        SG ->
+            "Semantic gravity"
+        SD ->
+            "Semantic density"
+        Gaze ->
+            "Gaze"
+        OR ->
+            "Ontic relation"
+        DR ->
+            "Discursive relation"
+
+stringToDimensionName : String -> Maybe DimensionName
+stringToDimensionName s =
+    -- to make the compiler remind us that we need to have ALL cases here,
+    -- we use this trick: https://stackoverflow.com/a/42742928 .
+    let
+        whatever blah =
+            case blah of
+                SG ->
+                    ()
+                SD ->
+                    ()
+                Gaze ->
+                    ()
+                OR ->
+                    ()
+                DR ->
+                    ()
+    in
+        case s of
+            "Semantic gravity" ->
+                Just SG
+            "Semantic density" ->
+                Just SD
+            "Gaze" ->
+                Just Gaze
+            "Ontic relation" ->
+                Just OR
+            "Discursive relation" ->
+                Just DR
+            _ ->
+                Nothing

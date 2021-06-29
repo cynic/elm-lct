@@ -17,6 +17,8 @@ import Browser.Events
 import Html.Attributes
 import SerializableData exposing (..)
 import Dimensions
+import Serialize.Decode
+import Serialize.Encode
 
 -- TODO: Save/retrieve diagrams
 -- TODO: SubR / IR instead of Gazes
@@ -71,20 +73,6 @@ dia_fullHeight diagram =
 dia_fullWidth : Diagram -> Int
 dia_fullWidth diagram =
     diagram.width + 30
-
-dimensionNameToString : DimensionName -> String
-dimensionNameToString dim =
-    case dim of
-        SG ->
-            "Semantic gravity"
-        SD ->
-            "Semantic density"
-        Gaze ->
-            "Gaze"
-        OR ->
-            "Ontic relation"
-        DR ->
-            "Discursive relation"
 
 dimensionNameToDimension : Diagram -> DimensionName -> Maybe Dimension
 dimensionNameToDimension diagram dim =
