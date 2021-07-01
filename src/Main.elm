@@ -283,9 +283,9 @@ band diagram n =
     let
         color =
             if n == 0 || n == 3 then
-                "#00b058"
+                "#C0C0C0"
             else
-                "#00ff82"
+                "#DCDCDC"
     in
         rect
             [ x (fromFloat (dia_withGraphX diagram identity))
@@ -1113,12 +1113,11 @@ drawFocusButton diagram index color dimensionName =
             , rx "4"
             , fillOpacity "0.8"
             , fill color
-            , stroke "black"
-            , strokeDasharray
+            , stroke
                 ( if diagram.ux.focusedDimension == Just dimensionName then
-                    ""
+                    "black"
                   else
-                    "4"
+                    "transparent"
                 )
             , strokeWidth
                 ( if diagram.ux.focusedDimension == Just dimensionName then

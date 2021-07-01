@@ -1,6 +1,8 @@
 module Dimensions exposing (..)
 import SerializableData exposing (..)
 
+-- colors from https://sashamaps.net/docs/resources/20-colors/
+
 sgInit : Dimension
 sgInit =
     { texts =
@@ -22,7 +24,7 @@ sgInit =
         --[Value 0 0.0, Value 1 0.5, Value 2 0.9, Described 3 1.0 "I ain't so dense, amirite?  Hat.  Hat.", Value 4 -0.9, Value 5 -1.0]
     , plus = "Increased abstraction and generalization; less embedded in a specific and concrete context"
     , minus = "Increased binding to a particular context or situation; decreased applicability to many different contexts"
-    , color = "#fcab30"
+    , color = "#e6194B" -- red
     }
 
 sdInit : Dimension
@@ -33,7 +35,7 @@ sdInit =
         [ Value 0 0.0 ]
     , plus = "Understanding requires a larger number of meanings per term; meaning condensed in jargon"
     , minus = "Understanding possible with fewer meanings per term; meaning expressed in \"ordinary\" terms"
-    , color = "#2cb3fb"
+    , color = "#f58231" -- orange
     }
 
 subrInit : Dimension
@@ -67,7 +69,7 @@ orInit =
         [ Value 0 0.0 ]
     , plus = "Applicable problem-situations or objects-of-study are strongly delineated"
     , minus = "Applicable to any problem-situations or objects-of-study" 
-    , color = "#ac2cfb"
+    , color = "#42d4f4" -- cyan
     }
 
 drInit : Dimension
@@ -78,5 +80,5 @@ drInit =
         [ Value 0 0.0 ]
     , plus = "Legitimate approach to problem is strongly delineated"
     , minus = "Any approach to the problem is welcome"
-    , color = "#fb2c2c"
+    , color = "#4363d8" -- blue
     }
