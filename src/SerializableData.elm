@@ -156,9 +156,9 @@ stringToDimensionName s =
         "Semantic density" ->
             Just SD
         "Interactional relation" ->
-            Just SubR
-        "Subjective relation" ->
             Just IR
+        "Subjective relation" ->
+            Just SubR
         "Ontic relation" ->
             Just OR
         "Discursive relation" ->

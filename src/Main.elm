@@ -8,7 +8,6 @@ import List
 import Dict as ElmDict
 import Browser
 import Json.Decode as D
-import Svg.Events exposing (on)
 import FontAwesome.Solid
 import FontAwesome.Svg exposing (viewIcon)
 import Svg.Events exposing (onClick)
@@ -26,12 +25,9 @@ import File exposing (File)
 import Json.Decode
 import Task
 
-
--- TODO: Save/retrieve diagrams
--- TODO: SubR / IR instead of Gazes
--- TODO: PA / RA dimension
 -- TODO: De-emphasize lines you don't really care about
 -- TODO: Interpolated lines for "gaze" = SubR/IR and ER = OR/DR
+-- TODO: PA / RA dimension
 -- TODO: "Plug a translation device in"???
 -- TODO: Better bands, which actually reflect the ranges and meanings of the focused dimension
 -- TODO: Band colours should be reflective of focused dimension.
@@ -39,9 +35,6 @@ import Task
 -- TODO: Track compositionevents so that I can put emojis into text!
 -- TODO: (Limited?) Undo?
 -- TODO: Track selection events so that I can copy-paste properly...
-
-iconSize : Float
-iconSize = 512.0
 
 -- diagram
 
@@ -207,7 +200,6 @@ drawEventText diagram n s =
             [ x (fromFloat (eventLineToGraphX diagram n + 8))
             , y (fromFloat (dia_withGraphY diagram identity))
             , fill "black"
-            --, textLength (fromInt diagram.config.eventSpacing ++ "px")
             , fontFamily "Calibri, sans-serif"
             , fontSize "14pt"
             ]
@@ -665,11 +657,11 @@ saveDiagramFile diagram =
 
 selectJsonFile : Cmd Message
 selectJsonFile =
-    Select.file ["application/json"] (\file -> Load (Select file))
+    Select.file ["application/json"] (Load << Select)
 
 getFileContent : File -> Cmd Message
 getFileContent file =
-    Task.perform (\content -> Load (Loaded content)) (File.toString file)
+    Task.perform (Load << Loaded) (File.toString file)
 
 loadDiagram : String -> Diagram -> Diagram
 loadDiagram content diagram =

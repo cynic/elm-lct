@@ -18,7 +18,9 @@ dimensionName =
                     ()
                 SD ->
                     ()
-                Gaze ->
+                IR ->
+                    ()
+                SubR ->
                     ()
                 OR ->
                     ()
@@ -28,7 +30,8 @@ dimensionName =
         Fuzz.oneOf
             [ Fuzz.constant SG
             , Fuzz.constant SD
-            , Fuzz.constant Gaze
+            , Fuzz.constant IR
+            , Fuzz.constant SubR
             , Fuzz.constant OR
             , Fuzz.constant DR
             ]
