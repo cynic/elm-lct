@@ -73,7 +73,8 @@ type alias Dimension =
 type DimensionName
     = SG
     | SD
-    | Gaze
+    | IR
+    | SubR
     | OR
     | DR
 
@@ -130,15 +131,6 @@ type alias Diagram =
     , ux : UX
     }
 
-dimensionNameMap : List (DimensionName, String)
-dimensionNameMap =
-    [ ( SG, "Semantic gravity" )
-    , ( SD, "Semantic density" )
-    , ( Gaze, "Gaze" )
-    , ( OR, "Ontic relation" )
-    , ( DR, "Discursive relation" )
-    ]
-
 dimensionNameToString : DimensionName -> String
 dimensionNameToString dim =
     case dim of
@@ -146,8 +138,10 @@ dimensionNameToString dim =
             "Semantic gravity"
         SD ->
             "Semantic density"
-        Gaze ->
-            "Gaze"
+        IR ->
+            "Interactional relation"
+        SubR ->
+            "Subjective relation"
         OR ->
             "Ontic relation"
         DR ->
@@ -161,8 +155,10 @@ stringToDimensionName s =
             Just SG
         "Semantic density" ->
             Just SD
-        "Gaze" ->
-            Just Gaze
+        "Interactional relation" ->
+            Just SubR
+        "Subjective relation" ->
+            Just IR
         "Ontic relation" ->
             Just OR
         "Discursive relation" ->

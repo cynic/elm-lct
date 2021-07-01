@@ -43,19 +43,20 @@ subrInit =
     , points =
         [ Value 0 0.0 ]
     , plus = "Requires some inner or inborn skill or knowledge for true understanding"
-    , minus = "Can be taught/learned by anyone"
-    , color = "#edfb2c"
+    , minus = "Can be understood by a broad spectrum of people"
+    , color = "#bfef45" -- lime
     }
 
-gazeInit : Dimension
-gazeInit =
+
+irInit : Dimension
+irInit =
     { texts =
         []
     , points =
         [ Value 0 0.0 ]
-    , plus = "Requires some inner or inborn skill or knowledge for true understanding"
-    , minus = "Can be taught/learned by anyone"
-    , color = "#edfb2c"
+    , plus = "Interactions with existing members and/or practices are necessary for true understanding"
+    , minus = "Can be understood without adopting specific behaviours or having particular interactions"
+    , color = "#3cb44b" -- mint
     }
 
 orInit : Dimension

@@ -131,7 +131,8 @@ init =
         Dict.fromList dimensionNameToString
             [ ( SG, Dimensions.sgInit )
             , ( SD, Dimensions.sdInit )
-            , ( Gaze, Dimensions.gazeInit )
+            , ( IR, Dimensions.irInit )
+            , ( SubR, Dimensions.subrInit )
             , ( OR, Dimensions.orInit )
             , ( DR, Dimensions.drInit )
             ]
@@ -1105,9 +1106,9 @@ drawFocusButton diagram index color dimensionName =
         , Svg.Attributes.cursor "pointer"
         ]
         [ rect
-            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 160)))
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 180)))
             , y (fromFloat (dia_withGraphY diagram (\y -> y + (30 * toFloat index) + 10)))
-            , width "150"
+            , width "170"
             , height "24"
             , rx "4"
             , fillOpacity "0.8"
@@ -1128,7 +1129,7 @@ drawFocusButton diagram index color dimensionName =
             ]
             []
         , text_
-            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 160) + 5))
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 180) + 5))
             , y (fromFloat (dia_withGraphY diagram (\y -> y + (30 * toFloat index) + 27)))
             , stroke "white"
             , strokeWidth "4"
@@ -1138,7 +1139,7 @@ drawFocusButton diagram index color dimensionName =
             ]
             [ text (dimensionNameToString dimensionName) ]
         , text_
-            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 160) + 5))
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 180) + 5))
             , y (fromFloat (dia_withGraphY diagram (\y -> y + (30 * toFloat index) + 27)))
             , fill "black"
             , fontFamily "Calibri, sans-serif"
