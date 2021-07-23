@@ -1306,19 +1306,19 @@ interpretKeypress diagram =
                 (D.field "metaKey" D.bool)
             |> D.andThen (\shouldIgnore ->
                 if shouldIgnore then
-                    D.fail <| Debug.log "X" "Ctrl, Alt, Composing, or Meta is active.  Ignoring."
+                    D.fail <| "Ctrl, Alt, Composing, or Meta is active.  Ignoring."
                 else
                     D.field "key" D.string
                     |> D.andThen (\key ->
                         case keyToTextAction key of
                             Nothing ->
-                                D.fail (Debug.log "Interpreting keypress" <| "No matching key for input: " ++ key)
+                                D.fail ("No matching key for input: " ++ key)
                             Just textAction ->
                                 D.succeed (UpdateText textAction)
                     )
             )
         _ ->
-            D.fail <| Debug.log "Y" "No text-editing interaction active"
+            D.fail <| "No text-editing interaction active"
 
 view : Diagram -> Html Message
 view diagram =
