@@ -77,6 +77,13 @@ config configuration =
         [ ( "eventSpacing", E.int configuration.eventSpacing )
         ]
 
+additionalInfo : AdditionalInfo -> E.Value
+additionalInfo info =
+    E.object
+        [ ( "gaze", E.bool info.showGaze )
+        , ( "epistemic", E.bool info.showEpistemic )
+        ]
+
 encodeDiagram : Diagram -> E.Value
 encodeDiagram diagram =
     E.object
@@ -86,5 +93,6 @@ encodeDiagram diagram =
         , ( "graphHeight", E.int diagram.graphHeight )
         , ( "events", E.list event diagram.events )
         , ( "dimensions", E.list dimensionKeyValue (Dict.toList diagram.dimensions) )
+        , ( "additional", additionalInfo diagram.additionalInfo )
         , ( "config", config diagram.config )
         ]

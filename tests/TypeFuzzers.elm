@@ -1,5 +1,5 @@
 module TypeFuzzers exposing (..)
-import Fuzz exposing (Fuzzer, int, list, string, float)
+import Fuzz exposing (Fuzzer, int, list, string, float, bool)
 import GenericDict as Dict exposing (Dict)
 import SerializableData exposing (..)
 
@@ -93,14 +93,15 @@ dimensionsKeyValue =
 
 diagramFuzzer : Fuzzer Diagram
 diagramFuzzer =
-    Fuzz.map4
-        (\(textHeight, width, graphHeight) events dimensions config ->
+    Fuzz.map5
+        (\(textHeight, width, graphHeight) events dimensions additionalInfo config ->
             { textHeight = textHeight
             , width = width
             , graphHeight = graphHeight
             , events = events
             , dimensions = Dict.fromList dimensionNameToString dimensions
             , config = config
+            , additionalInfo = additionalInfo
             , ux =
                 { interactable = Nothing
                 }
@@ -109,4 +110,5 @@ diagramFuzzer =
         ( Fuzz.tuple3 ( int, int, int ) )
         ( Fuzz.list string )
         ( Fuzz.list dimensionsKeyValue )
+        ( Fuzz.map2 AdditionalInfo bool bool )
         ( configurationFuzzer )

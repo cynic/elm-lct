@@ -34,12 +34,18 @@ type FileLoadProcess
     | Select File
     | Loaded String -- file content
 
+type InferredLine
+    = Gaze
+    | Epistemic
+
 -- Message
 type Message
     = FocusOn DimensionName
     | DefocusOn DimensionName
     | ShowDimension DimensionName
     | DoWithPoint PointInteraction Point
+    | ShowInferred InferredLine
+    | HideInferred InferredLine
     | RemovePointUI
     | DoWithEvent EventInteraction EventLine
     | UpdateText TextAction
@@ -119,6 +125,10 @@ init =
             , ( DR, Dimensions.drInit )
             ]
     , config = defaultConfig
+    , additionalInfo =
+        { showGaze = True
+        , showEpistemic = True
+        }
     , ux =
         { interactable = Nothing
         }
@@ -703,6 +713,38 @@ loadDiagram content diagram =
         Ok decoded ->
             decoded
 
+showGaze : AdditionalInfo -> AdditionalInfo
+showGaze info =
+    { info | showGaze = True }
+
+showEpistemic : AdditionalInfo -> AdditionalInfo
+showEpistemic info =
+    { info | showEpistemic = True }
+
+showInferredLine : InferredLine -> Diagram -> Diagram
+showInferredLine info diagram =
+    case info of
+        Gaze ->
+            { diagram | additionalInfo = showGaze diagram.additionalInfo }
+        Epistemic ->
+            { diagram | additionalInfo = showEpistemic diagram.additionalInfo }
+
+hideGaze : AdditionalInfo -> AdditionalInfo
+hideGaze info =
+    { info | showGaze = False }
+
+hideEpistemic : AdditionalInfo -> AdditionalInfo
+hideEpistemic info =
+    { info | showEpistemic = False }
+
+hideInferredLine : InferredLine -> Diagram -> Diagram
+hideInferredLine info diagram =
+    case info of
+        Gaze ->
+            { diagram | additionalInfo = hideGaze diagram.additionalInfo }
+        Epistemic ->
+            { diagram | additionalInfo = hideEpistemic diagram.additionalInfo }
+
 update : Message -> Diagram -> (Diagram, Cmd Message)
 update message diagram =
     case message of
@@ -712,6 +754,10 @@ update message diagram =
             ( defocusOn dimension diagram, Cmd.none )
         ShowDimension dimension ->
             ( reshow dimension diagram, Cmd.none )
+        HideInferred inf ->
+            ( hideInferredLine inf diagram, Cmd.none )
+        ShowInferred inf ->
+            ( showInferredLine inf diagram, Cmd.none )
         DoWithPoint ShowPointUI p ->
             ( showPointUI p diagram, Cmd.none )
         DoWithPoint MovePointUp p ->
@@ -834,8 +880,8 @@ drawPoint diagram color ux point =
                 ]
                 [ Svg.title [] [ text description ] ]
 
-drawContinuousLine : Diagram -> HexColor -> DimensionUX -> List ( Float, Float ) -> Svg a
-drawContinuousLine diagram color ux coordinates =
+drawContinuousLine : Diagram -> HexColor -> List (Attribute a) -> List ( Float, Float ) -> Svg a
+drawContinuousLine diagram color extraAttributes coordinates =
     case coordinates of
         [] ->
             g [] []
@@ -843,7 +889,7 @@ drawContinuousLine diagram color ux coordinates =
             g [] []
         (ix, iy)::_ ->
             Svg.path
-                [ d
+                ([ d
                     ( List.foldl (\(x, y) state ->
                         state
                         ++ fromFloat (x - (toFloat diagram.config.eventSpacing / 3)) ++ " " ++ fromFloat y ++ ", "
@@ -852,22 +898,26 @@ drawContinuousLine diagram color ux coordinates =
                     )
                 , stroke color
                 , strokeWidth "2"
-                , strokeOpacity
+                , fill "transparent"
+                ] ++ extraAttributes)
+                []
+
+drawLine : Diagram -> HexColor -> DimensionUX -> List Point -> Svg a
+drawLine diagram color ux =
+    let
+        extraAttrs =
+                [ strokeOpacity
                     (case ux of
                         Defocused ->
                             "0.1"
                         _ ->
                             "1.0"
                     )
-                , fill "transparent"
                 ]
-                []
-
-drawLine : Diagram -> HexColor -> DimensionUX -> List Point -> Svg a
-drawLine diagram color ux =
-    List.sortBy ( pointToEventLine )
-    >> List.map ( pointToGraphCoordinates diagram )
-    >> ( drawContinuousLine diagram color ux )
+    in
+        List.sortBy ( pointToEventLine )
+        >> List.map ( pointToGraphCoordinates diagram )
+        >> ( drawContinuousLine diagram color extraAttrs )
 
 drawPoints : Diagram -> HexColor -> DimensionUX -> List Point -> Svg a
 drawPoints diagram color ux points =
@@ -1169,6 +1219,151 @@ drawDimensionsPoints diagram =
           |> List.map (\dimension -> drawPoints diagram dimension.color dimension.ux dimension.points)
         )
 
+inferredLineToString : InferredLine -> String
+inferredLineToString ai =
+    case ai of
+        Gaze ->
+            "Gaze"
+        Epistemic ->
+            "Epistemic Relation"
+
+drawInferredButton : Diagram -> Int -> HexColor -> InferredLine -> Bool -> Svg Message
+drawInferredButton diagram index color inferred currentlyShown =
+    g
+        [ (if currentlyShown then
+            onClick (HideInferred inferred)
+          else
+            onClick (ShowInferred inferred)
+          )
+        , Svg.Attributes.cursor "pointer"
+        ]
+        [ rect
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 180)))
+            , y (fromFloat (dia_withGraphHeight diagram (\h -> h - (30 * toFloat index)) - 34))
+            , width "170"
+            , height "24"
+            , rx "4"
+            , fillOpacity
+                ( if currentlyShown then
+                    "0.8"
+                  else
+                    "0.2"
+                )
+            , fill color
+            , stroke "transparent"
+            , strokeWidth "1"
+            ]
+            []
+        , text_
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 180) + 5))
+            , y (fromFloat (dia_withGraphHeight diagram (\h -> h - (30 * toFloat index) - 17)))
+            , stroke "white"
+            , strokeWidth "4"
+            , strokeOpacity "0.4"
+            , fillOpacity "0.0"
+            , fontFamily "Calibri, sans-serif"
+            , fontSize "14pt"
+            ]
+            [ text (inferredLineToString inferred) ]
+        , text_
+            [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 180) + 5))
+            , y (fromFloat (dia_withGraphHeight diagram (\h -> h - (30 * toFloat index) - 17)))
+            , fill "black"
+            , fillOpacity
+                ( if currentlyShown then
+                    "1.0"
+                  else
+                    "0.2"
+                )
+            , strokeOpacity "0.0"
+            , fontFamily "Calibri, sans-serif"
+            , fontSize "14pt"
+            ]
+            [ text (inferredLineToString inferred) ]
+        ]
+
+drawInferredButtons : Diagram -> Svg Message
+drawInferredButtons diagram =
+    g
+        []
+        [ drawInferredButton diagram 0 "#99ccff" Gaze diagram.additionalInfo.showGaze
+        , drawInferredButton diagram 1 "#774411" Epistemic diagram.additionalInfo.showEpistemic
+        ]
+
+interpolateLinePoints : List Point -> List Point
+interpolateLinePoints points =
+    window 2 points
+    |> List.concatMap
+        (\subPoints ->
+            case subPoints of
+                a::b::[] ->
+                    let
+                        evtLineA = pointToEventLine a
+                        evtLineB = pointToEventLine b
+                        numToCalculate = evtLineB - evtLineA - 1
+                        valueA = pointToQuantitativeValue a
+                        valueB = pointToQuantitativeValue b
+                        valueBump = ((valueA + valueB) / 2.0) / toFloat numToCalculate
+                    in
+                        -- each point is evenly spaced
+                        List.range (evtLineA + 1) (evtLineB - 1)
+                        |> List.indexedMap (\i n ->
+                            Value n (valueBump * (toFloat i+1))
+                        )
+                _ ->
+                    []
+        )
+    |> (++) points
+    |> List.sortBy pointToEventLine
+
+inferredPointsToCoordinates : Diagram -> List Point -> List (Float, Float)
+inferredPointsToCoordinates diagram =
+    List.sortBy ( pointToEventLine )
+    >> interpolateLinePoints
+    >> List.map ( pointToGraphCoordinates diagram )
+
+drawInferredLine : Diagram -> HexColor -> Dimension -> Dimension -> Svg a
+drawInferredLine diagram color dimA dimB =
+    let
+        inferredA = inferredPointsToCoordinates diagram dimA.points
+        inferredB = inferredPointsToCoordinates diagram dimB.points
+        newLineLength =
+             Basics.min (List.length inferredA) (List.length inferredB)
+        produced =
+            List.map2
+                (\(x, aY) (_, bY) ->
+                    (x, (aY + bY) / 2.0)
+                )
+                (List.take newLineLength inferredA)
+                (List.take newLineLength inferredB)
+        extraAttrs =
+            [ strokeDasharray "4 1"
+            ]
+    in
+        drawContinuousLine diagram color extraAttrs produced
+
+drawInferredLines : Diagram -> Svg a
+drawInferredLines diagram =
+    g
+        []
+        [ if diagram.additionalInfo.showGaze then
+            Maybe.map2
+                (drawInferredLine diagram "#99ccff")
+                (dictGet SubR diagram.dimensions)
+                (dictGet IR diagram.dimensions)
+            |> Maybe.withDefault (g [id "SubR or IR not found! Error somewhere 😒"] [])
+          else
+            g [] []
+        , if diagram.additionalInfo.showEpistemic then
+            Maybe.map2
+                (drawInferredLine diagram "#774411")
+                (dictGet OR diagram.dimensions)
+                (dictGet DR diagram.dimensions)
+            |> Maybe.withDefault (g [id "OR or DR not found! Error somewhere 😔"] [])
+          else
+            g [] []
+        ]
+
 drawFocusButton : Diagram -> Int -> HexColor -> DimensionName -> Dimension -> Svg Message
 drawFocusButton diagram index color dimensionName dimension =
     g
@@ -1215,6 +1410,7 @@ drawFocusButton diagram index color dimensionName dimension =
             , stroke "white"
             , strokeWidth "4"
             , strokeOpacity "0.4"
+            , fillOpacity "0.0"
             , fontFamily "Calibri, sans-serif"
             , fontSize "14pt"
             ]
@@ -1225,7 +1421,7 @@ drawFocusButton diagram index color dimensionName dimension =
             , fill "black"
             , fillOpacity
                 ( if dimension.ux == Defocused then
-                    "0.1"
+                    "0.2"
                   else
                     "1.0"
                 )
@@ -1307,8 +1503,10 @@ svgView diagram =
     , vertAxis diagram
     , drawFocusButtons diagram
     , drawEvents diagram
+    , drawInferredLines diagram
     , drawDimensionsLines diagram
     , drawDimensionsPoints diagram
+    , drawInferredButtons diagram
     , drawLoadSave diagram
     , drawInteractable diagram diagram.ux.interactable
     ]

@@ -126,10 +126,16 @@ type alias UX =
     { interactable : Maybe Interactable
     }
 
+type alias AdditionalInfo =
+    { showGaze : Bool
+    , showEpistemic : Bool
+    }
+
 type alias Diagram =
     { textHeight : Int
     , width : Int
     , graphHeight : Int
+    , additionalInfo : AdditionalInfo
     , events : List Event
     , dimensions : Dict DimensionName Dimension
     , config : Configuration

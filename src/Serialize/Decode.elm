@@ -103,16 +103,28 @@ configuration =
         (\v -> { eventSpacing = v })
         ( D.field "eventSpacing" D.int )
 
+additionalInfo : D.Decoder AdditionalInfo
+additionalInfo =
+    D.map2
+        (\showGaze showEpistemic ->
+            { showGaze = showGaze
+            , showEpistemic = showEpistemic
+            }
+        )
+        ( D.field "gaze" D.bool )
+        ( D.field "epistemic" D.bool )
+
 diagram_v0 : D.Decoder Diagram
 diagram_v0 =
-    D.map6
-        (\textHeight width graphHeight events dimensions config ->
+    D.map7
+        (\textHeight width graphHeight events dimensions config additional ->
             { textHeight = textHeight
             , width = width
             , graphHeight = graphHeight
             , events = events
             , dimensions = Dict.fromList dimensionNameToString dimensions
             , config = config
+            , additionalInfo = additional
             , ux =
                 { interactable = Nothing
                 }
@@ -124,6 +136,7 @@ diagram_v0 =
         ( D.field "events" eventsList )
         ( D.field "dimensions" (D.list dimensionKeyValue) )
         ( D.field "config" configuration )
+        ( D.field "additional" additionalInfo )
 
 diagram : D.Decoder Diagram
 diagram =
