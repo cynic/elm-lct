@@ -26,6 +26,10 @@ dimensionName =
                     ()
                 DR ->
                     ()
+                PA ->
+                    ()
+                RA ->
+                    ()
     in
         Fuzz.oneOf
             [ Fuzz.constant SG
@@ -34,6 +38,8 @@ dimensionName =
             , Fuzz.constant SubR
             , Fuzz.constant OR
             , Fuzz.constant DR
+            , Fuzz.constant PA
+            , Fuzz.constant RA
             ]
 
 rangeDescription : Fuzzer RangeDescription

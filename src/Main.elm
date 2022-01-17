@@ -123,6 +123,8 @@ init =
             , ( SubR, Dimensions.subrInit )
             , ( OR, Dimensions.orInit )
             , ( DR, Dimensions.drInit )
+            , ( PA, Dimensions.paInit )
+            , ( RA, Dimensions.raInit )
             ]
     , config = defaultConfig
     , additionalInfo =
@@ -1286,7 +1288,7 @@ drawInferredButtons : Diagram -> Svg Message
 drawInferredButtons diagram =
     g
         []
-        [ drawInferredButton diagram 0 "#99ccff" Gaze diagram.additionalInfo.showGaze
+        [ drawInferredButton diagram 0 "#f58231" Gaze diagram.additionalInfo.showGaze
         , drawInferredButton diagram 1 "#774411" Epistemic diagram.additionalInfo.showEpistemic
         ]
 
@@ -1348,7 +1350,7 @@ drawInferredLines diagram =
         []
         [ if diagram.additionalInfo.showGaze then
             Maybe.map2
-                (drawInferredLine diagram "#99ccff")
+                (drawInferredLine diagram "#f58231")
                 (dictGet SubR diagram.dimensions)
                 (dictGet IR diagram.dimensions)
             |> Maybe.withDefault (g [id "SubR or IR not found! Error somewhere 😒"] [])

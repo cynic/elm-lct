@@ -83,6 +83,8 @@ type DimensionName
     | SubR
     | OR
     | DR
+    | PA
+    | RA
 
 type alias Band = Int -- which band (0-3) we're drawing
 
@@ -157,6 +159,10 @@ dimensionNameToString dim =
             "Ontic relation"
         DR ->
             "Discursive relation"
+        PA ->
+            "Positional autonomy"
+        RA ->
+            "Relational autonomy"
 
 -- we have a test for this, to make sure that we can round-trip.
 stringToDimensionName : String -> Maybe DimensionName
@@ -174,5 +180,9 @@ stringToDimensionName s =
             Just OR
         "Discursive relation" ->
             Just DR
+        "Positional autonomy" ->
+            Just PA
+        "Relational autonomy" ->
+            Just RA
         _ ->
             Nothing
