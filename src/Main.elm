@@ -25,19 +25,6 @@ import File exposing (File)
 import Json.Decode
 import Task
 
--- TODO: De-emphasize lines you don't really care about
--- TODO: Interpolated lines for "gaze" = SubR/IR and ER = OR/DR
--- TODO: PA / RA dimension
--- TODO: "Plug a translation device in"???
--- TODO: Better bands, which actually reflect the ranges and meanings of the focused dimension
--- TODO: Band colours should be reflective of focused dimension.
--- TODO: Better UX for moving a point up and down ... perhaps dragging and/or keypresses?
--- TODO: Track compositionevents so that I can put emojis into text!
--- TODO: (Limited?) Undo?
--- TODO: Track selection events so that I can copy-paste properly...
-
--- diagram
-
 valueChange : Float -- how much a position can change by, normally
 valueChange =
     0.1
@@ -50,6 +37,8 @@ type FileLoadProcess
 -- Message
 type Message
     = FocusOn DimensionName
+    | DefocusOn DimensionName
+    | ShowDimension DimensionName
     | DoWithPoint PointInteraction Point
     | RemovePointUI
     | DoWithEvent EventInteraction EventLine
@@ -131,8 +120,7 @@ init =
             ]
     , config = defaultConfig
     , ux =
-        { focusedDimension = Nothing
-        , interactable = Nothing
+        { interactable = Nothing
         }
     }
     |> calculateWidth
@@ -292,12 +280,6 @@ modifyUX : Diagram -> (UX -> UX) -> Diagram
 modifyUX diagram f =
     { diagram | ux = f diagram.ux }
 
-focusOn : DimensionName -> Diagram -> Diagram
-focusOn dim diagram =
-    modifyUX diagram (\ux ->
-        { ux | focusedDimension = Just dim }
-    )
-
 showTextUI : Diagram -> TextData -> PostTextEdit -> Diagram
 showTextUI diagram textData postTextEdit =
     modifyUX diagram (\ux ->
@@ -324,14 +306,66 @@ changeDimension dimensionName diagram f =
         Just dimension ->
             { diagram | dimensions = dictInsert dimensionName (f dimension) diagram.dimensions }
 
-changeFocusedDimension : Diagram -> (Dimension -> Dimension) -> Diagram
+withFocusedDimension : any -> Dict DimensionName Dimension -> (any -> DimensionName -> Dimension -> any) -> any
+withFocusedDimension foldable dimensions f =
+    Dict.fold
+        (\k dim state ->
+            case dim.ux of
+                Focused ->
+                    f state k dim
+                _ ->
+                    state
+        )
+        foldable
+        dimensions
 
+changeFocusedDimension : Diagram -> (Dimension -> Dimension) -> Diagram
 changeFocusedDimension diagram f =
-    case diagram.ux.focusedDimension of
-        Just dim ->
-            changeDimension dim diagram f
-        Nothing ->
-            diagram
+    Dict.fold
+        (\k dim state ->
+            case dim.ux of
+                Focused ->
+                    changeDimension k state f
+                _ ->
+                    state
+        )
+        diagram
+        diagram.dimensions
+
+-- only one can be focused at a time, so we need some extra logic here.
+focusOn : DimensionName -> Diagram -> Diagram
+focusOn chosenDimension diagram =
+    Dict.fold
+        (\k dim state ->
+            if chosenDimension == k then
+                changeDimension k state
+                    (\d ->
+                        { d | ux = Focused }
+                    )
+            else
+                case dim.ux of
+                    Focused ->
+                        changeDimension k state
+                            (\d ->
+                                { d | ux = Shown }
+                            )
+                    _ ->
+                        state
+        )
+        diagram
+        diagram.dimensions
+
+defocusOn : DimensionName -> Diagram -> Diagram
+defocusOn dim diagram =
+    changeDimension dim diagram (\dimension ->
+        { dimension | ux = Defocused }
+    )
+
+reshow : DimensionName -> Diagram -> Diagram
+reshow dim diagram =
+    changeDimension dim diagram (\dimension ->
+        { dimension | ux = Shown }
+    )
 
 pointWithValue : (Float -> Float) -> Point -> Point
 pointWithValue f point =
@@ -632,14 +666,12 @@ pointToText point =
 
 editPointText : Diagram -> Point -> Diagram
 editPointText diagram point =
-    case diagram.ux.focusedDimension of
-        Just dimensionName ->
+    withFocusedDimension diagram diagram.dimensions (\diagram_ dimensionName _ ->
             showTextUI
-                diagram
+                diagram_
                 { current = pointToText point, cursor = End, maxLength = 150 }
-                (StorePointText dimensionName point)
-        Nothing ->
-            diagram
+                (StorePointText dimensionName point)        
+    )
 
 encodeDiagramFile : Diagram -> Json.Encode.Value
 encodeDiagramFile diagram =
@@ -676,6 +708,10 @@ update message diagram =
     case message of
         FocusOn dimension ->
             ( focusOn dimension diagram , Cmd.none )
+        DefocusOn dimension ->
+            ( defocusOn dimension diagram, Cmd.none )
+        ShowDimension dimension ->
+            ( reshow dimension diagram, Cmd.none )
         DoWithPoint ShowPointUI p ->
             ( showPointUI p diagram, Cmd.none )
         DoWithPoint MovePointUp p ->
@@ -747,17 +783,30 @@ pointToGraphCoordinates : Diagram -> Point -> ( Float, Float )
 pointToGraphCoordinates diagram point =
     ( eventLineToGraphX diagram (pointToEventLine point), pointToGraphY diagram point )
 
-drawPoint : Diagram -> HexColor -> Point -> Svg a
-drawPoint diagram color point =
+drawPoint : Diagram -> HexColor -> DimensionUX -> Point -> Svg a
+drawPoint diagram color ux point =
     case point of
         Value n _ ->
             circle
                 [ cx (fromFloat (eventLineToGraphX diagram n))
                 , cy (fromFloat (pointToGraphY diagram point))
                 , r "5"
-                , fillOpacity "0.8"
+                , fillOpacity
+                    (case ux of
+                        Defocused ->
+                            "0.1"
+                        _ ->
+                            "0.8"
+                    )
                 , fill color
                 , stroke "black"
+                , strokeOpacity
+                    (case ux of
+                        Defocused ->
+                            "0.2"
+                        _ ->
+                            "1.0"
+                    )
                 ]
                 []
         Described n _ description ->
@@ -766,14 +815,27 @@ drawPoint diagram color point =
                 , y (fromFloat (pointToGraphY diagram point - 5))
                 , width "10"
                 , height "10"
-                , fillOpacity "0.8"
+                , fillOpacity
+                    (case ux of
+                        Defocused ->
+                            "0.1"
+                        _ ->
+                            "0.8"
+                    )
                 , fill color
                 , stroke "black"
+                , strokeOpacity
+                    (case ux of
+                        Defocused ->
+                            "0.2"
+                        _ ->
+                            "1.0"
+                    )
                 ]
                 [ Svg.title [] [ text description ] ]
 
-drawContinuousLine : Diagram -> HexColor -> List ( Float, Float ) -> Svg a
-drawContinuousLine diagram color coordinates =
+drawContinuousLine : Diagram -> HexColor -> DimensionUX -> List ( Float, Float ) -> Svg a
+drawContinuousLine diagram color ux coordinates =
     case coordinates of
         [] ->
             g [] []
@@ -790,19 +852,28 @@ drawContinuousLine diagram color coordinates =
                     )
                 , stroke color
                 , strokeWidth "2"
+                , strokeOpacity
+                    (case ux of
+                        Defocused ->
+                            "0.1"
+                        _ ->
+                            "1.0"
+                    )
                 , fill "transparent"
                 ]
                 []
 
-drawLine : Diagram -> HexColor -> List Point -> Svg a
-drawLine diagram color =
+drawLine : Diagram -> HexColor -> DimensionUX -> List Point -> Svg a
+drawLine diagram color ux =
     List.sortBy ( pointToEventLine )
     >> List.map ( pointToGraphCoordinates diagram )
-    >> ( drawContinuousLine diagram color )
+    >> ( drawContinuousLine diagram color ux )
 
-drawPoints : Diagram -> HexColor -> List Point -> Svg a
-drawPoints diagram color points =
-    g [] ( List.map (drawPoint diagram color) points )
+drawPoints : Diagram -> HexColor -> DimensionUX -> List Point -> Svg a
+drawPoints diagram color ux points =
+    g
+        []
+        ( List.map (drawPoint diagram color ux) points )
 
 -- is this a point that can be extended to the next event line?
 --   - In other words: is there already a point n+1 ??
@@ -975,7 +1046,7 @@ drawPointInteractionUI diagram dimension point =
                     ] -- trash icon
               else
                 g [] []
-            , drawPoint diagram dimension.color point
+            , drawPoint diagram dimension.color dimension.ux point
             ]
     )
 
@@ -1057,21 +1128,28 @@ drawInteractable diagram interactable =
         Nothing ->
             g [] []
         Just (InteractablePoint point) ->
-            case diagram.ux.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
-                Just dimension ->
+            withFocusedDimension
+                (g [] [])
+                diagram.dimensions
+                (\_ _ dimension ->
                     drawPointInteractionUI diagram dimension point
-                Nothing ->
-                    g [] []
+                )
         Just (InteractableText textData _) ->
             drawInteractableText diagram textData
 
 sortByFocused : Diagram -> List Dimension -> List Dimension
 sortByFocused diagram dimensions =
-    case diagram.ux.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
-        Nothing ->
-            dimensions
-        Just focused ->
-            List.sortBy (\dimension -> if dimension == focused then 1 else 0) dimensions
+    List.sortBy
+        (\dimension ->
+            case dimension.ux of
+                Focused ->
+                    2
+                Defocused ->
+                    1
+                Shown ->
+                    0
+        )
+        dimensions
 
 drawDimensionsLines : Diagram -> Svg a
 drawDimensionsLines diagram =
@@ -1079,7 +1157,7 @@ drawDimensionsLines diagram =
         []
         ( Dict.values diagram.dimensions
           |> sortByFocused diagram
-          |> List.map (\dimension -> drawLine diagram dimension.color dimension.points)
+          |> List.map (\dimension -> drawLine diagram dimension.color dimension.ux dimension.points)
         )
 
 drawDimensionsPoints : Diagram -> Svg a
@@ -1088,13 +1166,20 @@ drawDimensionsPoints diagram =
         []
         ( Dict.values diagram.dimensions
           |> sortByFocused diagram
-          |> List.map (\dimension -> drawPoints diagram dimension.color dimension.points)
+          |> List.map (\dimension -> drawPoints diagram dimension.color dimension.ux dimension.points)
         )
 
-drawFocusButton : Diagram -> Int -> HexColor -> DimensionName -> Svg Message
-drawFocusButton diagram index color dimensionName =
+drawFocusButton : Diagram -> Int -> HexColor -> DimensionName -> Dimension -> Svg Message
+drawFocusButton diagram index color dimensionName dimension =
     g
-        [ onClick (FocusOn dimensionName)
+        [ (case dimension.ux of
+            Focused ->
+                onClick (DefocusOn dimensionName)
+            Defocused ->
+                onClick (ShowDimension dimensionName)
+            Shown ->
+                onClick (FocusOn dimensionName)
+          )
         , Svg.Attributes.cursor "pointer"
         ]
         [ rect
@@ -1103,16 +1188,21 @@ drawFocusButton diagram index color dimensionName =
             , width "170"
             , height "24"
             , rx "4"
-            , fillOpacity "0.8"
+            , fillOpacity
+                ( if dimension.ux == Defocused then
+                    "0.2"
+                  else
+                    "0.8"
+                )
             , fill color
             , stroke
-                ( if diagram.ux.focusedDimension == Just dimensionName then
+                ( if dimension.ux == Focused then
                     "black"
                   else
                     "transparent"
                 )
             , strokeWidth
-                ( if diagram.ux.focusedDimension == Just dimensionName then
+                ( if dimension.ux == Focused then
                     "2"
                   else
                     "1"
@@ -1133,6 +1223,12 @@ drawFocusButton diagram index color dimensionName =
             [ x (fromFloat (dia_withGraphWidth diagram (\w -> w - 180) + 5))
             , y (fromFloat (dia_withGraphY diagram (\y -> y + (30 * toFloat index) + 27)))
             , fill "black"
+            , fillOpacity
+                ( if dimension.ux == Defocused then
+                    "0.1"
+                  else
+                    "1.0"
+                )
             , fontFamily "Calibri, sans-serif"
             , fontSize "14pt"
             ]
@@ -1143,14 +1239,15 @@ drawFocusButtons : Diagram -> Svg Message
 drawFocusButtons diagram =
     g
         []
-        ( List.indexedMap
-            (\i dimensionName ->
-                case dimensionNameToDimension diagram dimensionName of
-                    Just dim ->
-                        drawFocusButton diagram i dim.color dimensionName
-                    Nothing ->
-                        g [] []
-            ) (Dict.keys diagram.dimensions)
+        ( Dict.toList diagram.dimensions
+          |> List.indexedMap
+                (\i (dimensionName, dimension) ->
+                    case dimensionNameToDimension diagram dimensionName of
+                        Just dim ->
+                            drawFocusButton diagram i dim.color dimensionName dimension
+                        Nothing ->
+                            g [] []
+                )
         )
 
 drawLoadSave : Diagram -> Svg Message
@@ -1242,10 +1339,10 @@ withinPointRadius diagram =
     if busyWithTextInteraction diagram then
         D.fail "In the middle of a text interaction - ignoring point interactions for now"
     else
-        case diagram.ux.focusedDimension |> Maybe.andThen (dimensionNameToDimension diagram) of
-            Nothing ->
-                D.fail "No focused dimension"
-            Just dimension ->
+        withFocusedDimension
+            (D.fail "No focused dimension")
+            diagram.dimensions
+            (\_ _ dimension ->
                 D.map2 (\x y -> (x, y))
                     (D.field "clientX" D.int)
                     (D.field "clientY" D.int)
@@ -1265,6 +1362,7 @@ withinPointRadius diagram =
                                     Nothing ->
                                         D.fail "No point within radius"
                     )
+            )
 
 keyToTextAction : String -> Maybe TextAction
 keyToTextAction s =

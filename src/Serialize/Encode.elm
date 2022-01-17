@@ -43,6 +43,16 @@ point p =
                 , ( "desc", E.string s )
                 ]
 
+dimensionUX : DimensionUX -> E.Value
+dimensionUX ux =
+    case ux of
+        Shown ->
+            E.string "shown"
+        Focused ->
+            E.string "focused"
+        Defocused ->
+            E.string "defocused"
+
 dimension : Dimension -> E.Value
 dimension dim =
     E.object
@@ -51,6 +61,7 @@ dimension dim =
         , ( "plus", E.string dim.plus )
         , ( "minus", E.string dim.minus )
         , ( "color", E.string dim.color )
+        , ( "ux", dimensionUX dim.ux )
         ]
 
 dimensionKeyValue : ( DimensionName, Dimension ) -> E.Value

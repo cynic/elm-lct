@@ -56,15 +56,31 @@ point =
                 D.fail "Point is neither 'value' nor 'described'"
     )
 
+dimensionUX : D.Decoder DimensionUX
+dimensionUX =
+    D.string
+    |> D.andThen (\ux_ ->
+        case ux_ of
+            "shown" ->
+                D.succeed Shown
+            "focused" ->
+                D.succeed Focused
+            "defocused" ->
+                D.succeed Defocused
+            _ ->
+                D.fail "Dimension UX is not 'shown', 'focused', or 'defocused'"
+    )
+
 dimension : D.Decoder Dimension
 dimension =
-    D.map5
-        (\texts points plus minus color ->
+    D.map6
+        (\texts points plus minus color ux ->
             { texts = texts
             , points = points
             , plus = plus
             , minus = minus
             , color = color
+            , ux = ux
             }
         )
         ( D.field "texts" ( D.list rangeDescription ) )
@@ -72,6 +88,7 @@ dimension =
         ( D.field "plus" D.string )
         ( D.field "minus" D.string )
         ( D.field "color" D.string )
+        ( D.field "ux" dimensionUX )
 
 dimensionKeyValue : D.Decoder ( DimensionName, Dimension )
 dimensionKeyValue =
@@ -98,7 +115,6 @@ diagram_v0 =
             , config = config
             , ux =
                 { interactable = Nothing
-                , focusedDimension = Nothing
                 }
             }
         )

@@ -25,6 +25,7 @@ sgInit =
     , plus = "Increased abstraction and generalization; less embedded in a specific and concrete context"
     , minus = "Increased binding to a particular context or situation; decreased applicability to many different contexts"
     , color = "#e6194B" -- red
+    , ux = Shown
     }
 
 sdInit : Dimension
@@ -36,6 +37,7 @@ sdInit =
     , plus = "Understanding requires a larger number of meanings per term; meaning condensed in jargon"
     , minus = "Understanding possible with fewer meanings per term; meaning expressed in \"ordinary\" terms"
     , color = "#f58231" -- orange
+    , ux = Shown
     }
 
 subrInit : Dimension
@@ -47,6 +49,7 @@ subrInit =
     , plus = "Requires some inner or inborn skill or knowledge for true understanding"
     , minus = "Can be understood by a broad spectrum of people"
     , color = "#bfef45" -- lime
+    , ux = Shown
     }
 
 
@@ -59,6 +62,7 @@ irInit =
     , plus = "Interactions with existing members and/or practices are necessary for true understanding"
     , minus = "Can be understood without adopting specific behaviours or having particular interactions"
     , color = "#3cb44b" -- mint
+    , ux = Shown
     }
 
 orInit : Dimension
@@ -70,6 +74,7 @@ orInit =
     , plus = "Applicable problem-situations or objects-of-study are strongly delineated"
     , minus = "Applicable to any problem-situations or objects-of-study" 
     , color = "#42d4f4" -- cyan
+    , ux = Shown
     }
 
 drInit : Dimension
@@ -81,4 +86,5 @@ drInit =
     , plus = "Legitimate approach to problem is strongly delineated"
     , minus = "Any approach to the problem is welcome"
     , color = "#4363d8" -- blue
+    , ux = Shown
     }

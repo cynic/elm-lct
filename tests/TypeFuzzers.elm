@@ -62,20 +62,30 @@ point =
             , Fuzz.map3 Described int float string
             ]
 
+dimensionUX : Fuzzer DimensionUX
+dimensionUX =
+    Fuzz.oneOf
+    [ Fuzz.constant Shown
+    , Fuzz.constant Defocused
+    , Fuzz.constant Focused
+    ]
+
 dimension : Fuzzer Dimension
 dimension =
-    Fuzz.map3
-        (\texts points (plus, minus, color) ->
+    Fuzz.map4
+        (\texts points (plus, minus, color) ux ->
             { texts = texts
             , points = points
             , plus = plus
             , minus = minus
             , color = color
+            , ux = ux
             }
         )
         ( Fuzz.list rangeDescription )
         ( Fuzz.list point )
         ( Fuzz.tuple3 ( string, string, string ) )
+        ( dimensionUX )
 
 dimensionsKeyValue : Fuzzer (DimensionName, Dimension)
 dimensionsKeyValue =
@@ -92,8 +102,7 @@ diagramFuzzer =
             , dimensions = Dict.fromList dimensionNameToString dimensions
             , config = config
             , ux =
-                { focusedDimension = Nothing
-                , interactable = Nothing
+                { interactable = Nothing
                 }
             }
         )

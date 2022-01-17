@@ -62,12 +62,18 @@ type Point
 🟣 SG: context ↔ knowledge ✅
 -}
 
+type DimensionUX
+    = Shown
+    | Focused
+    | Defocused
+
 type alias Dimension =
     { texts : List RangeDescription
     , points : List Point
     , plus : String
     , minus : String
     , color : String
+    , ux : DimensionUX
     }
 
 type DimensionName
@@ -117,8 +123,7 @@ type Interactable
     | InteractableText TextData PostTextEdit
 
 type alias UX =
-    { focusedDimension : Maybe DimensionName
-    , interactable : Maybe Interactable
+    { interactable : Maybe Interactable
     }
 
 type alias Diagram =
