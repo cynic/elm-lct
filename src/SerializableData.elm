@@ -116,9 +116,13 @@ type EventInteraction
     | InsertEventAfter
     | EditEventText TextData
 
+type TargetContextInteraction
+    = EditTargetContextText TextData
+
 type PostTextEdit
     = StoreEventText EventLine
     | StorePointText DimensionName Point
+    | StoreTargetContextText
 
 type Interactable
     = InteractablePoint Point
@@ -142,6 +146,7 @@ type alias Diagram =
     , events : List Event
     , dimensions : Dict DimensionName Dimension
     , config : Configuration
+    , targetContext : String
     , ux : UX
     }
 

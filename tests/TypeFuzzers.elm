@@ -100,7 +100,7 @@ dimensionsKeyValue =
 diagramFuzzer : Fuzzer Diagram
 diagramFuzzer =
     Fuzz.map5
-        (\(textHeight, width, graphHeight) events dimensions additionalInfo config ->
+        (\(textHeight, width, graphHeight) (events, dimensions) additionalInfo targetContext config ->
             { textHeight = textHeight
             , width = width
             , graphHeight = graphHeight
@@ -108,6 +108,7 @@ diagramFuzzer =
             , dimensions = Dict.fromList dimensionNameToString dimensions
             , config = config
             , additionalInfo = additionalInfo
+            , targetContext = targetContext
             , ux =
                 { interactable = Nothing
                 , menuShown = False
@@ -115,7 +116,7 @@ diagramFuzzer =
             }
         )
         ( Fuzz.tuple3 ( int, int, int ) )
-        ( Fuzz.list string )
-        ( Fuzz.list dimensionsKeyValue )
+        ( Fuzz.tuple ( Fuzz.list string , Fuzz.list dimensionsKeyValue ) )
         ( Fuzz.map2 AdditionalInfo bool bool )
+        ( string )
         ( configurationFuzzer )

@@ -95,4 +95,5 @@ encodeDiagram diagram =
         , ( "dimensions", E.list dimensionKeyValue (Dict.toList diagram.dimensions) )
         , ( "additional", additionalInfo diagram.additionalInfo )
         , ( "config", config diagram.config )
+        , ( "targetContext", E.string diagram.targetContext )
         ]

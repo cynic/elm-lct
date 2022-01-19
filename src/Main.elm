@@ -50,6 +50,7 @@ type Message
     | HideInferred InferredLine
     | RemovePointUI
     | DoWithEvent EventInteraction EventLine
+    | EditTargetContext
     | UpdateText TextAction
     | Save Diagram
     | Load FileLoadProcess
@@ -128,6 +129,7 @@ init =
             , ( PA, Dimensions.paInit )
             , ( RA, Dimensions.raInit )
             ]
+    , targetContext = "Target context"
     , config = defaultConfig
     , additionalInfo =
         { showGaze = True
@@ -552,6 +554,8 @@ handleTextDecision diagram decision postAction textData =
                 StorePointText dimensionName point ->
                     changeDimension dimensionName diagram
                         (changePointInDimension ((==) point) (pointWithText textData.current))
+                StoreTargetContextText ->
+                    { diagram | targetContext = textData.current }
             ) |> removeInteractableUI      
         Cancel ->
             removeInteractableUI diagram
@@ -758,6 +762,16 @@ openMenu : Diagram -> Diagram
 openMenu diagram =
     modifyUX diagram (\ux -> { ux | menuShown = True })
 
+editTargetContext : Diagram -> Diagram
+editTargetContext diagram =
+    showTextUI
+        diagram
+        { maxLength = 65
+        , current = diagram.targetContext
+        , cursor = End
+        }
+        StoreTargetContextText
+
 update : Message -> Diagram -> (Diagram, Cmd Message)
 update message diagram =
     case message of
@@ -799,6 +813,8 @@ update message diagram =
             ( deleteEvent diagram n, Cmd.none )
         DoWithEvent (EditEventText textData) n ->
             ( showTextUI diagram textData (StoreEventText n), Cmd.none )
+        EditTargetContext ->
+            ( editTargetContext diagram , Cmd.none )
         UpdateText textAction ->
             ( updateText diagram textAction, Cmd.none )
         Save diagramToSave ->
@@ -1540,6 +1556,40 @@ drawLoadSave diagram =
             g [] []
         ]
 
+drawTargetContext : Diagram -> Svg Message
+drawTargetContext diagram =
+    g
+        []
+        [ text_
+            [ x "65"
+            , y "25"
+            , fontFamily "Times New Roman, serif"
+            , fontSize "20pt"
+            , fontWeight "bold"
+            ]
+            [ text diagram.targetContext ]
+        , g
+            [ onClick EditTargetContext
+            , Svg.Attributes.cursor "pointer"
+            ]
+            [ rect
+                [ x "40"
+                , y "5"
+                , width "25"
+                , height "25"
+                , fill "white"
+                , rx "2"
+                ]
+                []
+            , g
+                [ transform ("translate (40 7) scale (0.04)")
+                ]
+                [ viewIcon FontAwesome.Solid.edit ]
+            ]
+
+        ]
+
+
 svgView : Diagram -> Svg Message
 svgView diagram =
   svg
@@ -1560,6 +1610,7 @@ svgView diagram =
     , drawDimensionsPoints diagram
     , drawInferredButtons diagram
     , drawLoadSave diagram
+    , drawTargetContext diagram
     , drawInteractable diagram diagram.ux.interactable
     ]
 

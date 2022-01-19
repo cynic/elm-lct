@@ -116,8 +116,8 @@ additionalInfo =
 
 diagram_v0 : D.Decoder Diagram
 diagram_v0 =
-    D.map7
-        (\textHeight width graphHeight events dimensions config additional ->
+    D.map8
+        (\textHeight width graphHeight events dimensions config additional targetContext ->
             { textHeight = textHeight
             , width = width
             , graphHeight = graphHeight
@@ -125,6 +125,7 @@ diagram_v0 =
             , dimensions = Dict.fromList dimensionNameToString dimensions
             , config = config
             , additionalInfo = additional
+            , targetContext = targetContext
             , ux =
                 { interactable = Nothing
                 , menuShown = False
@@ -138,6 +139,7 @@ diagram_v0 =
         ( D.field "dimensions" (D.list dimensionKeyValue) )
         ( D.field "config" configuration )
         ( D.field "additional" additionalInfo )
+        ( D.field "targetContext" D.string )
 
 diagram : D.Decoder Diagram
 diagram =
