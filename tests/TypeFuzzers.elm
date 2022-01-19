@@ -110,6 +110,7 @@ diagramFuzzer =
             , additionalInfo = additionalInfo
             , ux =
                 { interactable = Nothing
+                , menuShown = False
                 }
             }
         )

@@ -126,6 +126,7 @@ type Interactable
 
 type alias UX =
     { interactable : Maybe Interactable
+    , menuShown : Bool
     }
 
 type alias AdditionalInfo =

@@ -42,6 +42,8 @@ type InferredLine
 type Message
     = FocusOn DimensionName
     | DefocusOn DimensionName
+    | OpenMenu
+    | CloseMenu
     | ShowDimension DimensionName
     | DoWithPoint PointInteraction Point
     | ShowInferred InferredLine
@@ -102,7 +104,7 @@ init : Diagram
 init =
     { textHeight = 320
     , width = 0 -- will be calculated
-    , graphHeight = 320
+    , graphHeight = 400
     , events =
         ["New event"]
 {-
@@ -133,6 +135,7 @@ init =
         }
     , ux =
         { interactable = Nothing
+        , menuShown = False
         }
     }
     |> calculateWidth
@@ -747,9 +750,21 @@ hideInferredLine info diagram =
         Epistemic ->
             { diagram | additionalInfo = hideEpistemic diagram.additionalInfo }
 
+closeMenu : Diagram -> Diagram
+closeMenu diagram =
+    modifyUX diagram (\ux -> { ux | menuShown = False })
+
+openMenu : Diagram -> Diagram
+openMenu diagram =
+    modifyUX diagram (\ux -> { ux | menuShown = True })
+
 update : Message -> Diagram -> (Diagram, Cmd Message)
 update message diagram =
     case message of
+        CloseMenu ->
+            ( closeMenu diagram , Cmd.none )
+        OpenMenu ->
+            ( openMenu diagram , Cmd.none )
         FocusOn dimension ->
             ( focusOn dimension diagram , Cmd.none )
         DefocusOn dimension ->
@@ -1452,8 +1467,13 @@ drawLoadSave : Diagram -> Svg Message
 drawLoadSave diagram =
     g
         []
-        [ g -- group for save-button
-            [ onClick (Save diagram)
+        [ g -- group for burger-menu
+            [ onClick
+                (if diagram.ux.menuShown then
+                    CloseMenu
+                 else
+                    OpenMenu
+                )
             , Svg.Attributes.cursor "pointer"
             ]
             [ rect
@@ -1465,29 +1485,59 @@ drawLoadSave diagram =
                 , rx "2"
                 ]
                 []
-            , g
-                [ transform ("translate (5 5) scale (0.05)")
-                ]
-                [ viewIcon FontAwesome.Solid.cloudDownloadAlt ]
+            , if diagram.ux.menuShown then
+                g
+                    [ transform ("translate (14 5) scale (0.05)")
+                    ]
+                    [ viewIcon FontAwesome.Solid.ellipsisV ]
+              else
+                g
+                    [ transform ("translate (5 5) scale (0.05)")
+                    ]
+                    [ viewIcon FontAwesome.Solid.ellipsisH ]
             ]
-        , g -- group for load-button
-            [ onClick (Load RequestLoad)
-            , Svg.Attributes.cursor "pointer"
-            ]
-            [ rect
-                [ x "40" 
-                , y "5" 
-                , width "32"
-                , height "25"
-                , fill "white"
-                , rx "2"
-                ]
+        , if diagram.ux.menuShown then
+            g
                 []
-            , g
-                [ transform ("translate (40 5) scale (0.05)")
+                [ g -- group for save-button
+                    [ onClick (Save diagram)
+                    , Svg.Attributes.cursor "pointer"
+                    ]
+                    [ rect
+                        [ x "5"
+                        , y "40"
+                        , width "32"
+                        , height "25"
+                        , fill "white"
+                        , rx "2"
+                        ]
+                        []
+                    , g
+                        [ transform ("translate (5 40) scale (0.05)")
+                        ]
+                        [ viewIcon FontAwesome.Solid.cloudDownloadAlt ]
+                    ]
+                , g -- group for load-button
+                    [ onClick (Load RequestLoad)
+                    , Svg.Attributes.cursor "pointer"
+                    ]
+                    [ rect
+                        [ x "5" 
+                        , y "75" 
+                        , width "32"
+                        , height "25"
+                        , fill "white"
+                        , rx "2"
+                        ]
+                        []
+                    , g
+                        [ transform ("translate (8 75) scale (0.05)")
+                        ]
+                        [ viewIcon FontAwesome.Solid.upload ]
+                    ]
                 ]
-                [ viewIcon FontAwesome.Solid.upload ]
-            ]
+          else
+            g [] []
         ]
 
 svgView : Diagram -> Svg Message

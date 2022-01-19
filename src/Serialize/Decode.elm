@@ -127,6 +127,7 @@ diagram_v0 =
             , additionalInfo = additional
             , ux =
                 { interactable = Nothing
+                , menuShown = False
                 }
             }
         )
