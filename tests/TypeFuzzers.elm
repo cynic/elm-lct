@@ -2,6 +2,7 @@ module TypeFuzzers exposing (..)
 import Fuzz exposing (Fuzzer, int, list, string, float, bool)
 import GenericDict as Dict exposing (Dict)
 import SerializableData exposing (..)
+import Set
 
 configurationFuzzer : Fuzzer Configuration
 configurationFuzzer =
@@ -45,13 +46,13 @@ dimensionName =
 rangeDescription : Fuzzer RangeDescription
 rangeDescription =
     Fuzz.map2
-        (\d r ->
+        (\d ex ->
             { description = d
-            , range = r
+            , examples = Set.fromList ex
             }
         )
         string
-        ( Fuzz.tuple ( float, float ) )
+        ( Fuzz.list Fuzz.string )
 
 point : Fuzzer Point
 point =

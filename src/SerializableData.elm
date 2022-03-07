@@ -1,7 +1,7 @@
 module SerializableData exposing (..)
 import GenericDict exposing (Dict)
 import ListExtensions exposing (first)
-import Set
+import Set exposing (Set)
 
 type alias EventLine =
     Int
@@ -43,17 +43,9 @@ type TextAction
     | Decision TextDecision
     | Key String
 
-type DimensionRange
-    = PlusPlus
-    | Plus
-    | Minus
-    | MinusMinus
-
 type alias RangeDescription =
     { description : String
-    , indicators : Set String
     , examples : Set String
-    , range : DimensionRange
     }
 
 type Point

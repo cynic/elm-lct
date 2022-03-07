@@ -3,6 +3,7 @@ import Serialize.Encode exposing (currentVersion)
 import SerializableData exposing (..)
 import Json.Decode as D
 import GenericDict as Dict
+import Set exposing (Set)
 
 eventsList : D.Decoder (List Event)
 eventsList =
@@ -20,23 +21,16 @@ dimensionName =
                     D.fail "Unknown dimension name"
         )
 
-range : D.Decoder ( Float, Float )
-range =
-    D.map2
-        (\a b -> ( a, b ) )
-        ( D.field "a" D.float )
-        ( D.field "b" D.float )
-
 rangeDescription : D.Decoder RangeDescription
 rangeDescription =
     D.map2
-        (\desc r ->
+        (\desc ex ->
             { description = desc
-            , range = r
+            , examples = Set.fromList ex
             }
         )
         ( D.field "description" D.string )
-        ( D.field "range" range )
+        ( D.field "examples" (D.list D.string) )
 
 point : D.Decoder Point
 point =

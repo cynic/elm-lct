@@ -12,18 +12,11 @@ event : Event -> E.Value
 event e =
     E.string e
 
-range : ( Float, Float ) -> E.Value
-range (a,b) =
-    E.object
-        [ ( "a", E.float a )
-        , ( "b", E.float b )
-        ]
-
 rangeDescription : RangeDescription -> E.Value
 rangeDescription rdesc =
     E.object
         [ ( "description", E.string rdesc.description )
-        , ( "range", range rdesc.range )
+        , ( "examples", E.set E.string rdesc.examples )
         ]
 
 point : Point -> E.Value

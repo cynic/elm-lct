@@ -1,5 +1,6 @@
 module Dimensions exposing (..)
 import SerializableData exposing (..)
+import Set
 
 -- colors from https://sashamaps.net/docs/resources/20-colors/
 -- ...and then I just picked other ones too
@@ -7,25 +8,17 @@ import SerializableData exposing (..)
 sgInit : Dimension
 sgInit =
     { texts =
-        [ { description = "Tied to a concrete context or situation, or tied to a set of known contexts or situations"
-          , indicators = []
-          , examples = []
-          , range = Minus
+        [ { description = "Strongly tied to specific context(s) or situation(s); requires effort to abstract"
+          , examples = Set.empty
           }
-        , { description = "Strongly tied to specific context(s) or situation(s); requires effort to abstract"
-          , indicators = []
-          , examples = []
-          , range = MinusMinus
+        , { description = "Tied to a concrete context or situation, or tied to a set of known contexts or situations"
+          , examples = Set.empty
           }
         , { description = "Abstracted and generalized, with application still visible"
-          , indicators = []
-          , examples = []
-          , range = Plus
+          , examples = Set.empty
           }
         , { description = "Theoretical, generalized, and abstracted; requires effort to tie to a context"
-          , indicators = []
-          , examples = []
-          , range = PlusPlus
+          , examples = Set.empty
           }
         ]
     , points =
@@ -101,25 +94,17 @@ drInit =
 paInit : Dimension
 paInit =
     { texts =
-        [ { description = "Knowledge constituents are (on average) from external context"
-          , indicators = []
-          , examples = []
-          , range = Minus
+        [ { description = "Knowledge constituents are almost exclusively from external context"
+          , examples = Set.empty
           }
-        , { description = "Knowledge constituents are almost exclusively from external context"
-          , indicators = []
-          , examples = []
-          , range = MinusMinus
+        , { description = "Knowledge constituents are (on average) from external context"
+          , examples = Set.empty
           }
         , { description = "Knowledge constituents are (on average) from target context"
-          , indicators = []
-          , examples = []
-          , range = Plus
+          , examples = Set.empty
           }
         , { description = "Knowledge constituents are almost exclusively from target context"
-          , indicators = []
-          , examples = []
-          , range = PlusPlus
+          , examples = Set.empty
           }
         ]
     , points =
@@ -134,25 +119,17 @@ paInit =
 raInit : Dimension
 raInit =
     { texts =
-        [ { description = "Purpose of discourse has little to do with target context"
-          , indicators = []
-          , examples = []
-          , range = Minus
+        [ { description = "Purpose of discourse has almost nothing to do with target context"
+          , examples = Set.empty
           }
-        , { description = "Purpose of discourse has almost nothing to do with target context"
-          , indicators = []
-          , examples = []
-          , range = MinusMinus
+        , { description = "Purpose of discourse has little to do with target context"
+          , examples = Set.empty
           }
         , { description = "Purpose of discourse has some relation to target context"
-          , indicators = []
-          , examples = []
-          , range = Plus
+          , examples = Set.empty
           }
         , { description = "Purpose of discourse is almost exclusively about target context"
-          , indicators = []
-          , examples = []
-          , range = PlusPlus
+          , examples = Set.empty
           }
         ]
     , points =

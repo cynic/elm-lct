@@ -1736,13 +1736,49 @@ interpretKeypress diagram =
         _ ->
             D.fail <| "No text-editing interaction active"
 
+translationTable : Diagram -> Html Message
+translationTable diagram =
+    Html.div
+        []
+        [ Html.h1
+            []
+            [ withFocusedDimension
+                ""
+                diagram.dimensions
+                (\state name _ -> 
+                    if state == "" then
+                        dimensionNameToString name
+                    else
+                        state ++ " & " ++ dimensionNameToString name
+                )
+              |> Html.text
+            ]
+        , Html.table
+            []
+            [ Html.thead
+                []
+                [ Html.tr
+                    []
+                    [ Html.td
+                        []
+                        [ Html.text "Description"
+                        ]
+                    , Html.td
+                        []
+                        [ Html.text "Examples"
+                        ]
+                    ]
+                ]
+            ]
+        ]
+
 view : Diagram -> Html Message
 view diagram =
     Html.div
         [ Svg.Events.on "mousemove" (withinPointRadius diagram)            
         ]
         [ svgView diagram
-        , translationTable diagra
+        , translationTable diagram
         ]
 
 subscriptions : Diagram -> Sub Message
