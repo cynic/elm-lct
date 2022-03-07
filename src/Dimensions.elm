@@ -8,16 +8,24 @@ sgInit : Dimension
 sgInit =
     { texts =
         [ { description = "Tied to a concrete context or situation, or tied to a set of known contexts or situations"
-          , range = ( -0.5, 0.0 )
+          , indicators = []
+          , examples = []
+          , range = Minus
           }
         , { description = "Strongly tied to specific context(s) or situation(s); requires effort to abstract"
-          , range = ( -1.0, -0.5 )
+          , indicators = []
+          , examples = []
+          , range = MinusMinus
           }
         , { description = "Abstracted and generalized, with application still visible"
-          , range = ( 0.0, 0.5 )
+          , indicators = []
+          , examples = []
+          , range = Plus
           }
         , { description = "Theoretical, generalized, and abstracted; requires effort to tie to a context"
-          , range = ( 0.5, 1.0 )
+          , indicators = []
+          , examples = []
+          , range = PlusPlus
           }
         ]
     , points =
@@ -94,16 +102,24 @@ paInit : Dimension
 paInit =
     { texts =
         [ { description = "Knowledge constituents are (on average) from external context"
-          , range = ( -0.5, 0.0 )
+          , indicators = []
+          , examples = []
+          , range = Minus
           }
         , { description = "Knowledge constituents are almost exclusively from external context"
-          , range = ( -1.0, -0.5 )
+          , indicators = []
+          , examples = []
+          , range = MinusMinus
           }
         , { description = "Knowledge constituents are (on average) from target context"
-          , range = ( 0.0, 0.5 )
+          , indicators = []
+          , examples = []
+          , range = Plus
           }
         , { description = "Knowledge constituents are almost exclusively from target context"
-          , range = ( 0.5, 1.0 )
+          , indicators = []
+          , examples = []
+          , range = PlusPlus
           }
         ]
     , points =
@@ -119,16 +135,24 @@ raInit : Dimension
 raInit =
     { texts =
         [ { description = "Purpose of discourse has little to do with target context"
-          , range = ( -0.5, 0.0 )
+          , indicators = []
+          , examples = []
+          , range = Minus
           }
         , { description = "Purpose of discourse has almost nothing to do with target context"
-          , range = ( -1.0, -0.5 )
+          , indicators = []
+          , examples = []
+          , range = MinusMinus
           }
         , { description = "Purpose of discourse has some relation to target context"
-          , range = ( 0.0, 0.5 )
+          , indicators = []
+          , examples = []
+          , range = Plus
           }
         , { description = "Purpose of discourse is almost exclusively about target context"
-          , range = ( 0.5, 1.0 )
+          , indicators = []
+          , examples = []
+          , range = PlusPlus
           }
         ]
     , points =

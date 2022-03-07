@@ -1741,7 +1741,9 @@ view diagram =
     Html.div
         [ Svg.Events.on "mousemove" (withinPointRadius diagram)            
         ]
-        [ svgView diagram ]
+        [ svgView diagram
+        , translationTable diagra
+        ]
 
 subscriptions : Diagram -> Sub Message
 subscriptions diagram =
